@@ -1,0 +1,9 @@
+Date: 06/05/2026
+1) Document date 05/05/2026
+2) Xem bài mới được giao bên AIVN
+3) Poster design for personal use
+4) Tập Võ
+5) Nghiên cứu bài võ + làm giáo án
+6) Đưa cho Ca xem file RFP mới
+7) Document lại worklog ngày 06/05
+8) Tạo folder chứa worklog
