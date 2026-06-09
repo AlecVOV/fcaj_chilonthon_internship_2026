@@ -1,0 +1,84 @@
+openapi: "3.0.0"
+info:
+  title: To-Do Manager API
+  description: Action Group for Bedrock Task Manager Agent
+  version: "1.0"
+
+paths:
+  /create-task:
+    post:
+      summary: Create a new task
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  description: Task title
+                description:
+                  type: string
+                  description: Optional task description
+                dueDate:
+                  type: string
+                  format: date
+                  description: Due date in YYYY-MM-DD format
+                priority:
+                  type: integer
+                  minimum: 0
+                  maximum: 3
+                  description: "0=none, 1=low, 2=medium, 3=high"
+      responses:
+        '200':
+          description: Task created successfully
+
+  /update-task:
+    put:
+      summary: Update an existing task
+      operationId: updateTask
+      parameters:
+        - name: taskId
+          in: query
+          required: true
+          schema:
+            type: string
+            description: UUID of the task to update
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                status:
+                  type: string
+                  enum: [pending, in_progress, completed, cancelled]
+                priority:
+                  type: integer
+                  minimum: 0
+                  maximum: 3
+      responses:
+        '200':
+          description: Task updated successfully
+
+  /delete-task:
+    delete:
+      summary: Delete a task
+      operationId: deleteTask
+      parameters:
+        - name: taskId
+          in: query
+          required: true
+          schema:
+            type: string
+            description: UUID of the task to delete
+      responses:
+        '200':
+          description: Task deleted successfully

@@ -1,0 +1,33 @@
+{
+  "name": "focus-mode-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxi typecheck",
+    "lint": "eslint .",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "dependencies": {
+    "@nuxtjs/tailwindcss": "^6.13.0",
+    "@pinia/nuxt": "^0.9.0",
+    "@supabase/supabase-js": "^2.46.0",
+    "@vueuse/core": "^11.2.0",
+    "dayjs": "^1.11.13",
+    "dexie": "^4.0.8",
+    "pinia": "^2.2.6"
+  },
+  "devDependencies": {
+    "@nuxt/devtools": "^4.0.0-alpha.4",
+    "@types/node": "^22.9.0",
+    "nuxt": "^3.15.0",
+    "typescript": "^5.6.0",
+    "vue": "^3.5.0",
+    "vue-tsc": "^2.1.0"
+  }
+}

@@ -1,0 +1,334 @@
+# ============================================================================
+# Focus Mode App — GitLab CI/CD Pipeline (Nuxt 4 + Cloudflare Pages)
+# ============================================================================
+# Stages: lint → test → build → deploy
+# Target: Nuxt 4 static site + Nitro serverless → Cloudflare Pages
+# ============================================================================
+
+stages:
+  - lint
+  - test
+  - build
+  - deploy
+
+# ---------------------------------------------------------------------------
+# Global Variables
+# ---------------------------------------------------------------------------
+variables:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "9"
+
+# ---------------------------------------------------------------------------
+# Cache for faster installs
+# ---------------------------------------------------------------------------
+.cache_node: &cache_node
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}-node
+    paths:
+      - .pnpm-store/
+      - node_modules/
+      - .nuxt/
+
+# ---------------------------------------------------------------------------
+# Base Node setup
+# ---------------------------------------------------------------------------
+.node_setup: &node_setup
+  image: node:${NODE_VERSION}-alpine
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@${PNPM_VERSION} --activate
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install --frozen-lockfile
+
+# ===========================================================================
+# STAGE 1: LINT
+# ===========================================================================
+
+# --- TypeScript / Vue Lint ---
+typescript_lint:
+  stage: lint
+  <<: *node_setup
+  <<: *cache_node
+  script:
+    - pnpm run typecheck          # npx nuxi typecheck
+    - pnpm run lint               # eslint .
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# --- CSS / Style Lint ---
+style_lint:
+  stage: lint
+  <<: *node_setup
+  <<: *cache_node
+  script:
+    - pnpm run lint:style         # stylelint "**/*.{vue,css}" (if configured)
+  only:
+    - merge_requests
+    - main
+  allow_failure: true
+
+# --- Python Lint (Lambda functions — unchanged) ---
+python_lint:
+  stage: lint
+  image: python:3.12-slim
+  before_script:
+    - pip install ruff
+  script:
+    - ruff check lambdas/
+    - ruff format --check lambdas/
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# --- SQL Lint ---
+sql_lint:
+  stage: lint
+  image: python:3.12-slim
+  before_script:
+    - pip install sqlfluff
+  script:
+    - sqlfluff lint docs/database/schema.sql --dialect postgres
+  only:
+    - merge_requests
+    - main
+
+# ===========================================================================
+# STAGE 2: TEST
+# ===========================================================================
+
+# --- Vitest Unit Tests (70% coverage target) ---
+vitest_tests:
+  stage: test
+  <<: *node_setup
+  <<: *cache_node
+  script:
+    - pnpm run test --coverage
+    # Enforce 70% line coverage threshold
+    - |
+      COVERAGE=$(node -e "
+        const fs = require('fs');
+        const data = JSON.parse(fs.readFileSync('coverage/coverage-summary.json','utf8'));
+        const pct = data.total.lines.pct;
+        console.log(pct);
+      ")
+      echo "Line coverage: ${COVERAGE}%"
+      if [ "$(echo "$COVERAGE < 70" | bc)" -eq 1 ]; then
+        echo "❌ Coverage ${COVERAGE}% is below 70% threshold!"
+        exit 1
+      fi
+      echo "✅ Coverage ${COVERAGE}% meets 70% threshold."
+  artifacts:
+    paths:
+      - coverage/
+    reports:
+      junit: test-results/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# --- Python Unit Tests (Lambda functions — unchanged) ---
+python_test:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - pip install -r lambdas/requirements-test.txt
+  script:
+    - cd lambdas
+    - pytest --cov=. --cov-report=xml --cov-report=term --junitxml=test-reports/junit.xml
+    - |
+      COVERAGE=$(coverage report | grep TOTAL | awk '{print $NF}' | sed 's/%//')
+      echo "Python coverage: ${COVERAGE}%"
+      if [ "$(echo "$COVERAGE < 70" | bc)" -eq 1 ]; then
+        echo "❌ Python coverage below 70%!"
+        exit 1
+      fi
+    # Test Markdown report string generation (no LaTeX/Tectonic needed)
+    - python -c "
+from report_generator import render_markdown_template
+template = render_markdown_template({
+    'REPORT-DATE-FULL': 'May 21, 2026',
+    'USER-DISPLAY-NAME': 'Test User',
+    'USER-EMAIL': 'test@example.com',
+    'TOTAL-FOCUS-TIME': '120',
+    'SESSIONS-COUNT': '4',
+    'TASKS-COMPLETED': '3',
+    'TASKS-TOTAL': '5',
+    'DOMINANT-EMOTION': 'focused',
+    'STREAK-DAYS': '7',
+    'TASK-LIST-ROWS': '| completed | Test task | 30 |',
+    'PEAK-FOCUS-HOUR': '14:00',
+    'MOST-PRODUCTIVE-DAY': 'Wednesday',
+    'LONGEST-STREAK': '90',
+    'MOOD-SUMMARY-TEXT': 'Great day!',
+    'AI-SUGGESTIONS-BLOCK': '- Try morning sessions.',
+    'RAG-RECOMMENDATIONS-BLOCK': '- On Patience (sutra)',
+    'APP-URL': 'https://focusmode.app',
+})
+assert '# Daily Focus Report' in template, 'Missing markdown header'
+assert 'May 21, 2026' in template, 'Date not rendered'
+assert 'Test User' in template, 'User name not rendered'
+assert '120' in template, 'Focus time not rendered'
+assert 'focused' in template, 'Dominant emotion not rendered'
+assert '{{' not in template, 'Unreplaced placeholder found'
+print('Markdown template test passed — all variables rendered')
+"
+  artifacts:
+    paths:
+      - lambdas/test-reports/
+    reports:
+      junit: lambdas/test-reports/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: lambdas/coverage.xml
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# ===========================================================================
+# STAGE 3: BUILD
+# ===========================================================================
+
+# --- Build Nuxt 4 for Cloudflare Pages ---
+build_nuxt:
+  stage: build
+  <<: *node_setup
+  <<: *cache_node
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@${PNPM_VERSION} --activate
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install --frozen-lockfile
+    # Inject env vars from GitLab CI Variables
+    - echo "NUXT_PUBLIC_SUPABASE_URL=${NUXT_PUBLIC_SUPABASE_URL}" >> .env
+    - echo "NUXT_PUBLIC_SUPABASE_ANON_KEY=${NUXT_PUBLIC_SUPABASE_ANON_KEY}" >> .env
+    - echo "NUXT_PUBLIC_API_GATEWAY_URL=${NUXT_PUBLIC_API_GATEWAY_URL}" >> .env
+    - echo "NUXT_PUBLIC_APP_URL=${NUXT_PUBLIC_APP_URL}" >> .env
+  script:
+    - pnpm run build
+  artifacts:
+    paths:
+      - dist/                    # Nuxt output (static + functions)
+    expire_in: 30 days
+  only:
+    - main
+    - develop
+
+# ===========================================================================
+# STAGE 4: DEPLOY
+# ===========================================================================
+
+# --- Deploy to Cloudflare Pages ---
+deploy_cloudflare:
+  stage: deploy
+  image: node:${NODE_VERSION}-alpine
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@${PNPM_VERSION} --activate
+    - pnpm add -g wrangler
+  script:
+    # Use Cloudflare Wrangler to deploy to Pages
+    - npx wrangler pages deploy dist/ \
+        --project-name focus-mode-app \
+        --branch ${CI_COMMIT_REF_NAME} \
+        --commit-dirty=true
+  environment:
+    name: ${CI_COMMIT_REF_NAME}
+    url: https://${CI_COMMIT_REF_NAME}.focus-mode-app.pages.dev
+  only:
+    - main
+    - develop
+  when: manual   # Manual approval for production; auto for develop
+
+# --- Alternative: Deploy to Netlify ---
+deploy_netlify:
+  stage: deploy
+  image: node:${NODE_VERSION}-alpine
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@${PNPM_VERSION} --activate
+    - pnpm add -g netlify-cli
+  script:
+    - netlify deploy \
+        --dir dist/ \
+        --prod \
+        --auth ${NETLIFY_AUTH_TOKEN} \
+        --site ${NETLIFY_SITE_ID}
+  environment:
+    name: production
+    url: https://focus-mode-app.netlify.app
+  only:
+    - main
+  when: manual
+
+# --- Deploy Lambda Functions (unchanged from original) ---
+deploy_lambdas:
+  stage: deploy
+  image: public.ecr.aws/sam/build-python3.12:latest
+  before_script:
+    - cd lambdas
+    - pip install -r requirements.txt -t ./package/
+  script:
+    - |
+      for lambda_dir in focus-emotion-detector focus-report-generator focus-rag-recommender focus-ai-suggestions focus-admin-vectorize; do
+        echo "Deploying ${lambda_dir}..."
+        cd lambdas/${lambda_dir}
+        sam build --template template.yaml
+        sam deploy \
+          --stack-name focus-app-${lambda_dir} \
+          --capabilities CAPABILITY_IAM \
+          --no-confirm-changeset \
+          --no-fail-on-empty-changeset \
+          --region ${AWS_DEFAULT_REGION}
+        cd ../..
+      done
+  only:
+    - main
+  when: manual
+
+# ===========================================================================
+# Utility: Release Tag (version bump + changelog)
+# ===========================================================================
+release_tag:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add git
+  script:
+    - |
+      if [ -z "${CI_COMMIT_TAG}" ]; then
+        echo "Skipping release — no tag"
+        exit 0
+      fi
+      echo "Releasing version ${CI_COMMIT_TAG}"
+  only:
+    - tags
+
+# ===========================================================================
+# Playwright E2E Tests (optional — not enforced in MVP)
+# ===========================================================================
+playwright_e2e:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@${PNPM_VERSION} --activate
+    - pnpm install --frozen-lockfile
+    - pnpm exec playwright install --with-deps chromium
+  script:
+    - npx playwright test --project=chromium
+  artifacts:
+    when: on_failure
+    paths:
+      - playwright-report/
+      - test-results/
+  only:
+    - main
+  allow_failure: true   # E2E is optional for MVP

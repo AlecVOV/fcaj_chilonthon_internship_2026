@@ -1,0 +1,186 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-neutral-400 dark:border-dark-border;
+  }
+  body {
+    @apply bg-neutral-100 text-neutral-950 font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    text-rendering: optimizeLegibility;
+  }
+  .dark body {
+    @apply bg-dark-bg text-dark-text;
+  }
+}
+
+@layer components {
+  /* Card */
+  .card {
+    @apply bg-white border border-neutral-200 rounded shadow-subtle p-5;
+  }
+  .dark .card {
+    @apply bg-dark-card border-dark-border shadow-subtle-dark;
+  }
+
+  /* Input */
+  .input {
+    @apply w-full rounded border border-neutral-400 bg-white px-3 py-2 text-sm text-neutral-950
+           placeholder:text-neutral-400
+           focus:border-interactive-blue focus:outline-none focus:ring-1 focus:ring-interactive-blue/30
+           transition-colors;
+  }
+  .dark .input {
+    @apply bg-dark-surface border-dark-border text-dark-text placeholder:text-white/25
+           focus:border-interactive-blue;
+  }
+
+  /* Primary Button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded bg-interactive-blue px-4 py-2
+           text-sm font-medium text-white
+           hover:bg-interactive-blue/90
+           active:bg-interactive-blue/80
+           disabled:opacity-40 disabled:cursor-not-allowed
+           transition-colors;
+  }
+
+  /* Outline Button */
+  .btn-outline {
+    @apply inline-flex items-center justify-center rounded border border-neutral-400
+           bg-transparent px-4 py-2 text-sm font-medium text-neutral-950
+           hover:bg-neutral-150
+           active:bg-neutral-200
+           disabled:opacity-40 disabled:cursor-not-allowed
+           transition-colors;
+  }
+  .dark .btn-outline {
+    @apply border-dark-border text-dark-text hover:bg-dark-surface active:bg-dark-card;
+  }
+
+  /* Ghost Button */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center rounded bg-transparent px-4 py-2
+           text-sm font-medium text-neutral-950
+           hover:bg-neutral-150
+           active:bg-neutral-200
+           transition-colors;
+  }
+  .dark .btn-ghost {
+    @apply text-dark-text hover:bg-dark-surface active:bg-dark-card;
+  }
+
+  /* Danger Button */
+  .btn-danger {
+    @apply inline-flex items-center justify-center rounded bg-critical px-4 py-2
+           text-sm font-medium text-white
+           hover:bg-critical/90 active:bg-critical/80
+           disabled:opacity-40 disabled:cursor-not-allowed
+           transition-colors;
+  }
+  .dark .btn-danger {
+    @apply bg-critical-dark hover:bg-critical-dark/90;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center rounded px-2 py-0.5 text-2xs font-medium;
+  }
+  .badge-success {
+    @apply bg-success/15 text-success;
+  }
+  .dark .badge-success {
+    @apply bg-success-dark/20 text-success-dark;
+  }
+  .badge-warning {
+    @apply bg-warning/15 text-warning;
+  }
+  .dark .badge-warning {
+    @apply bg-warning-dark/20 text-warning-dark;
+  }
+  .badge-critical {
+    @apply bg-critical/15 text-critical;
+  }
+  .dark .badge-critical {
+    @apply bg-critical-dark/20 text-critical-dark;
+  }
+
+  /* Link */
+  .link {
+    @apply text-interactive-blue hover:underline transition-colors;
+  }
+
+  /* Divider */
+  .divider {
+    @apply border-t border-neutral-200;
+  }
+  .dark .divider {
+    @apply border-dark-border;
+  }
+
+  /* Table */
+  .table-base {
+    @apply w-full text-sm;
+  }
+  .table-base thead th {
+    @apply bg-neutral-150 border-b border-neutral-200 px-4 py-3 text-left text-2xs font-medium
+           uppercase tracking-wider text-neutral-950/50;
+  }
+  .dark .table-base thead th {
+    @apply bg-dark-surface border-dark-border text-white/40;
+  }
+  .table-base tbody td {
+    @apply border-b border-neutral-200 px-4 py-3 text-sm;
+  }
+  .dark .table-base tbody td {
+    @apply border-dark-border;
+  }
+  .table-base tbody tr:hover td {
+    @apply bg-neutral-100;
+  }
+  .dark .table-base tbody tr:hover td {
+    @apply bg-dark-surface/50;
+  }
+
+  /* Navbar */
+  .navbar {
+    @apply bg-squid-ink text-white;
+  }
+
+  /* Tabs */
+  .tab {
+    @apply inline-flex items-center border-b-2 border-transparent px-4 py-2.5 text-sm
+           font-medium text-neutral-950/50 hover:text-neutral-950 transition-colors;
+  }
+  .tab-active {
+    @apply border-interactive-blue text-interactive-blue;
+  }
+  .dark .tab {
+    @apply text-white/40 hover:text-white/70;
+  }
+  .dark .tab-active {
+    @apply border-interactive-blue text-interactive-blue;
+  }
+
+  /* Status Dot */
+  .status-dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+  .status-dot.online { @apply bg-success; }
+  .status-dot.offline { @apply bg-critical; }
+  .dark .status-dot.online { @apply bg-success-dark; }
+  .dark .status-dot.offline { @apply bg-critical-dark; }
+
+  /* Animation */
+  .animate-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}

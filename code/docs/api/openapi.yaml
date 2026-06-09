@@ -1,0 +1,475 @@
+# ============================================================================
+# Focus Mode App — AWS Lambda API (OpenAPI 3.0 Specification)
+# Served via Amazon API Gateway → AWS Lambda (Python/Node.js)
+# ============================================================================
+
+openapi: "3.0.3"
+info:
+  title: "Focus Mode App — Serverless Microservices API"
+  description: |
+    REST API for the Focus Mode productivity app.
+    All endpoints are served by AWS Lambda functions behind Amazon API Gateway.
+    Authentication is handled by Supabase Auth (JWT bearer tokens).
+  version: "1.0.0"
+  contact:
+    name: "Student Developer"
+    email: "{{DEVELOPER_EMAIL}}"
+
+servers:
+  - url: "https://{{API_GATEWAY_ID}}.execute-api.{{AWS_REGION}}.amazonaws.com/prod"
+    description: "Production (API Gateway)"
+
+# ---------------------------------------------------------------------------
+# Security Definitions
+# ---------------------------------------------------------------------------
+components:
+  securitySchemes:
+    SupabaseJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Supabase Auth JWT token from client session"
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: "API Gateway API key for rate limiting"
+
+# ---------------------------------------------------------------------------
+# Common Schemas
+# ---------------------------------------------------------------------------
+  schemas:
+    # --- Emotion Detection ---
+    EmotionRequest:
+      type: object
+      required: [journal_text]
+      properties:
+        journal_text:
+          type: string
+          maxLength: 1000
+          description: "Raw journal text from user after a focus session"
+          example: "I felt really focused today but after 2 hours I was exhausted."
+        session_id:
+          type: string
+          format: uuid
+          description: "Associated focus session ID"
+      example:
+        journal_text: "Felt great today, got a lot done."
+        session_id: "550e8400-e29b-41d4-a716-446655440000"
+
+    EmotionResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        emotion_label:
+          type: string
+          enum: [focused, stressed, exhausted, relaxed, unmotivated]
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        embedding_vector:
+          type: array
+          items:
+            type: number
+          description: "Optional 384-dim embedding for downstream RAG (all-MiniLM-L6-v2)"
+      example:
+        session_id: "550e8400-e29b-41d4-a716-446655440000"
+        emotion_label: "focused"
+        confidence: 0.87
+
+    # --- Report Generation ---
+    ReportRequest:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+          description: "Date for the daily report (defaults to yesterday)"
+        send_email:
+          type: boolean
+          default: true
+      example:
+        user_id: "550e8400-e29b-41d4-a716-446655440000"
+        date: "2026-05-20"
+        send_email: true
+
+    ReportResponse:
+      type: object
+      properties:
+        worklog_id:
+          type: string
+          format: uuid
+        latex_url:
+          type: string
+          format: uri
+        pdf_url:
+          type: string
+          format: uri
+        email_sent:
+          type: boolean
+        message:
+          type: string
+      example:
+        worklog_id: "550e8400-e29b-41d4-a716-446655440000"
+        latex_url: "https://{{BUCKET}}.s3.amazonaws.com/reports/user_xyz/2026-05-20_report.tex"
+        pdf_url: "https://{{BUCKET}}.s3.amazonaws.com/reports/user_xyz/2026-05-20_report.pdf"
+        email_sent: true
+        message: "Report generated and emailed successfully."
+
+    # --- RAG Recommendations ---
+    RAGRequest:
+      type: object
+      required: [session_id]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          description: "Focus session to base recommendations on (uses its emotion_label)"
+        limit:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 10
+        types:
+          type: array
+          items:
+            type: string
+            enum: [quote, sutra, video, article, audio]
+          description: "Filter by content type"
+      example:
+        session_id: "550e8400-e29b-41d4-a716-446655440000"
+        limit: 3
+        types: ["quote", "sutra"]
+
+    RAGResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        emotion_matched:
+          type: string
+        recommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaItem"
+      example:
+        session_id: "550e8400-e29b-41d4-a716-446655440000"
+        emotion_matched: "stressed"
+        recommendations:
+          - id: "660e8400-e29b-41d4-a716-446655440000"
+            title: "Patience in Adversity"
+            type: "sutra"
+            content_text: "When the mind is disturbed..."
+            similarity: 0.92
+
+    MediaItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        type:
+          type: string
+          enum: [quote, sutra, video, article, audio]
+        content_text:
+          type: string
+        content_url:
+          type: string
+          format: uri
+        source:
+          type: string
+        similarity:
+          type: number
+
+    # --- Agentic Suggestions ---
+    AgenticResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        suggestions:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [schedule, break_time, task_priority, energy_peak]
+              message:
+                type: string
+              confidence:
+                type: number
+          example:
+            - type: "energy_peak"
+              message: "Your focus peaks at 22:00. Consider scheduling deep work sessions in the evening."
+              confidence: 0.78
+            - type: "break_time"
+              message: "You tend to lose focus after 90 minutes. Try 25/5 Pomodoro cycles on Mondays."
+
+    # --- Health Check ---
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "ok"
+        service:
+          type: string
+          example: "focus-app-emotion-lambda"
+        version:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+
+    # --- Errors ---
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        statusCode:
+          type: integer
+      example:
+        error: "Unauthorized"
+        message: "Invalid or expired JWT token"
+        statusCode: 401
+
+# ---------------------------------------------------------------------------
+# Paths (API Endpoints)
+# ---------------------------------------------------------------------------
+paths:
+  # =========================================================================
+  # Emotion Detection (NLP Lambda — Python + ONNX / HF Inference)
+  # =========================================================================
+  /emotion/detect:
+    post:
+      tags: [NLP - Emotion Detection]
+      summary: "Analyze journal text for emotion"
+      description: |
+        Sends journal text to the NLP Lambda running `distilbert-base-uncased-emotion`
+        (ONNX runtime) and returns a 5-class emotion label with confidence.
+      security:
+        - SupabaseJWT: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmotionRequest"
+      responses:
+        "200":
+          description: "Emotion detected successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmotionResponse"
+        "400":
+          description: "Bad request (missing or invalid journal_text)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # =========================================================================
+  # Report Generation (Daily Report Lambda)
+  # =========================================================================
+  /reports/generate:
+    post:
+      tags: [Reports]
+      summary: "Generate daily LaTeX report and email PDF"
+      description: |
+        Triggered by EventBridge at 23:59 nightly, or manually by the user.
+        Aggregates focus sessions → compiles LaTeX via Tectonic → stores .tex/.pdf on S3
+        → sends email via Amazon SES.
+      security:
+        - SupabaseJWT: []
+        - ApiKeyHeader: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportRequest"
+      responses:
+        "200":
+          description: "Report generated successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "500":
+          description: "Internal error during generation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # =========================================================================
+  # RAG Content Recommendations
+  # =========================================================================
+  /rag/recommend:
+    post:
+      tags: [RAG - Recommendations]
+      summary: "Get personalized content recommendations based on session emotion"
+      description: |
+        Takes the emotion_label from a focus session, queries pgvector for
+        similar content embeddings, and returns ranked recommendations.
+      security:
+        - SupabaseJWT: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RAGRequest"
+      responses:
+        "200":
+          description: "Recommendations retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RAGResponse"
+        "404":
+          description: "Session not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # =========================================================================
+  # Agentic AI Suggestions
+  # =========================================================================
+  /ai/suggestions:
+    get:
+      tags: [AI - Agentic Suggestions]
+      summary: "Get AI-driven productivity suggestions"
+      description: |
+        Analyzes user's historical focus patterns and returns actionable
+        suggestions (best time to work, break frequency, task prioritization).
+      security:
+        - SupabaseJWT: []
+        - ApiKeyHeader: []
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+          description: "Number of days of history to analyze"
+      responses:
+        "200":
+          description: "Suggestions generated"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgenticResponse"
+
+  # =========================================================================
+  # Admin: Vectorize Content (Admin CMS webhook)
+  # =========================================================================
+  /admin/vectorize:
+    post:
+      tags: [Admin - Content Management]
+      summary: "Trigger embedding generation for new content"
+      description: |
+        Admin-only endpoint. Takes content text, generates a 384-dim embedding
+        via all-MiniLM-L6-v2, and stores it in media_library.pgvector.
+      security:
+        - SupabaseJWT: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content_text, type]
+              properties:
+                title:
+                  type: string
+                content_text:
+                  type: string
+                  description: "Raw text to embed"
+                content_url:
+                  type: string
+                  format: uri
+                type:
+                  type: string
+                  enum: [quote, sutra, video, article, audio]
+                source:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+              example:
+                title: "On Patience"
+                content_text: "Patience is the antidote to anger..."
+                type: "sutra"
+                source: "Lamrim Class 2023"
+                tags: ["patience", "lamrim"]
+      responses:
+        "201":
+          description: "Content vectorized and stored"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  message:
+                    type: string
+                example:
+                  id: "770e8400-e29b-41d4-a716-446655440000"
+                  message: "Content embedded and stored successfully."
+        "403":
+          description: "Forbidden (non-admin user)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # =========================================================================
+  # Health Check
+  # =========================================================================
+  /health:
+    get:
+      tags: [System]
+      summary: "Health check endpoint"
+      responses:
+        "200":
+          description: "Service is healthy"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"

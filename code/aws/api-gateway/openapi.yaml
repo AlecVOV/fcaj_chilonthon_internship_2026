@@ -1,0 +1,158 @@
+openapi: "3.0.0"
+info:
+  title: Focus Mode API Gateway
+  version: "1.0"
+  description: |
+    Routes frontend requests to Lambda functions.
+    All routes require JWT authentication (Supabase Auth).
+    Admin routes additionally require admin role.
+
+servers:
+  - url: https://${API_ID}.execute-api.ap-southeast-1.amazonaws.com/prod
+
+security:
+  - jwtAuth: []
+
+paths:
+  /agent/chat:
+    post:
+      summary: Send message to Bedrock Task Agent
+      operationId: agentChat
+      x-amazon-apigateway-integration:
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:agent-bff/invocations
+        httpMethod: POST
+        type: aws_proxy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [inputText]
+              properties:
+                sessionId: { type: string }
+                inputText: { type: string }
+      responses:
+        '200':
+          description: Agent response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId: { type: string }
+                  responseText: { type: string }
+
+  /emotion/detect:
+    post:
+      summary: Detect emotion from journal text
+      operationId: detectEmotion
+      x-amazon-apigateway-integration:
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:focus-emotion-detector/invocations
+        httpMethod: POST
+        type: aws_proxy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journal_text]
+              properties:
+                journal_text: { type: string, maxLength: 1000 }
+                session_id: { type: string }
+      responses:
+        '200':
+          description: Emotion label + confidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emotion_label: { type: string }
+                  confidence: { type: number }
+
+  /report:
+    post:
+      summary: Generate daily Markdown report
+      operationId: generateReport
+      x-amazon-apigateway-integration:
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:focus-report-generator/invocations
+        httpMethod: POST
+        type: aws_proxy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id: { type: string }
+                date: { type: string, format: date }
+                send_email: { type: boolean }
+      responses:
+        '200':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  markdown_url: { type: string }
+                  pdf_url: { type: string }
+                  email_sent: { type: boolean }
+
+  /rag/recommend:
+    post:
+      summary: Get content recommendations based on emotion
+      operationId: getRecommendations
+      x-amazon-apigateway-integration:
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:focus-rag-recommender/invocations
+        httpMethod: POST
+        type: aws_proxy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emotion: { type: string }
+                limit: { type: integer }
+      responses:
+        '200':
+          description: Ranked recommendations
+
+  /admin/vectorize:
+    post:
+      summary: Generate embedding for media item (admin only)
+      operationId: vectorizeMedia
+      x-amazon-apigateway-integration:
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:focus-admin-vectorize/invocations
+        httpMethod: POST
+        type: aws_proxy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content_text]
+              properties:
+                title: { type: string }
+                content_text: { type: string }
+                type: { type: string }
+                source: { type: string }
+                tags: { type: array, items: { type: string } }
+      responses:
+        '200':
+          description: Embedding generated
+
+components:
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      x-amazon-apigateway-authorizer:
+        type: jwt
+        jwtConfiguration:
+          issuer: https://${SUPABASE_PROJECT}.supabase.co/auth/v1
+          audience: [authenticated]

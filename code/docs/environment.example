@@ -1,0 +1,75 @@
+# ============================================================================
+# Focus Mode App — Environment Variables (Nuxt 4)
+# Copy this file to .env and fill in your actual values.
+# NEVER commit .env to Git (it is in .gitignore).
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# SUPABASE (Backend as a Service)
+# ---------------------------------------------------------------------------
+# Found in: Supabase Dashboard → Project Settings → API
+# NUXT_PUBLIC_* variables are exposed to the browser
+NUXT_PUBLIC_SUPABASE_URL=https://{{YOUR_PROJECT_ID}}.supabase.co
+NUXT_PUBLIC_SUPABASE_ANON_KEY={{YOUR_SUPABASE_ANON_KEY}}
+
+# Server-only (used in Nitro server routes, not exposed to client)
+SUPABASE_SERVICE_ROLE_KEY={{YOUR_SUPABASE_SERVICE_ROLE_KEY}}
+SUPABASE_JWT_SECRET={{YOUR_SUPABASE_JWT_SECRET}}
+
+# ---------------------------------------------------------------------------
+# AWS API GATEWAY (Lambda endpoints)
+# ---------------------------------------------------------------------------
+NUXT_PUBLIC_API_GATEWAY_URL=https://{{API_GATEWAY_ID}}.execute-api.{{AWS_REGION}}.amazonaws.com/prod
+API_GATEWAY_KEY={{YOUR_API_GATEWAY_API_KEY}}
+
+# ---------------------------------------------------------------------------
+# AWS (Serverless Infrastructure — server-only)
+# ---------------------------------------------------------------------------
+AWS_ACCESS_KEY_ID={{YOUR_AWS_ACCESS_KEY_ID}}
+AWS_SECRET_ACCESS_KEY={{YOUR_AWS_SECRET_ACCESS_KEY}}
+AWS_DEFAULT_REGION=ap-southeast-1
+
+# S3 Bucket for reports + ambient media
+S3_BUCKET_NAME={{YOUR_BUCKET_NAME}}
+
+# SES verified sender email
+SES_SENDER_EMAIL=reports@{{YOUR_DOMAIN}}
+
+# CloudFront distribution ID (for CMS web deployment)
+CMS_CF_DISTRIBUTION_ID={{YOUR_CLOUDFRONT_DISTRIBUTION_ID}}
+CMS_BUCKET_NAME={{YOUR_CMS_BUCKET_NAME}}
+
+# ---------------------------------------------------------------------------
+# HUGGING FACE (NLP Fallback — used in Lambda, not browser)
+# ---------------------------------------------------------------------------
+HF_API_TOKEN={{YOUR_HUGGINGFACE_API_TOKEN}}
+
+# ---------------------------------------------------------------------------
+# APP CONFIG (public)
+# ---------------------------------------------------------------------------
+NUXT_PUBLIC_APP_NAME=Focus Mode
+NUXT_PUBLIC_APP_URL=https://focusmode.app
+NUXT_PUBLIC_SUPPORT_EMAIL=support@{{YOUR_DOMAIN}}
+
+# ---------------------------------------------------------------------------
+# CLOUDFLARE PAGES (CI/CD)
+# ---------------------------------------------------------------------------
+CLOUDFLARE_API_TOKEN={{YOUR_CLOUDFLARE_API_TOKEN}}
+CLOUDFLARE_ACCOUNT_ID={{YOUR_CLOUDFLARE_ACCOUNT_ID}}
+
+# ---------------------------------------------------------------------------
+# NETLIFY (alternative deploy target)
+# ---------------------------------------------------------------------------
+NETLIFY_AUTH_TOKEN={{YOUR_NETLIFY_AUTH_TOKEN}}
+NETLIFY_SITE_ID={{YOUR_NETLIFY_SITE_ID}}
+
+# ---------------------------------------------------------------------------
+# OPTIONAL: Sentry (Error Monitoring)
+# ---------------------------------------------------------------------------
+NUXT_PUBLIC_SENTRY_DSN={{YOUR_SENTRY_DSN}}
+
+# ---------------------------------------------------------------------------
+# OPTIONAL: PostHog (Analytics)
+# ---------------------------------------------------------------------------
+NUXT_PUBLIC_POSTHOG_KEY={{YOUR_POSTHOG_KEY}}
+NUXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
