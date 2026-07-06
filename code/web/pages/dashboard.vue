@@ -60,6 +60,26 @@
       </div>
       <div class="card"><FocusTimer /></div>
     </div>
+
+    <!-- Analytics charts — computed client-side from tasks + focus sessions -->
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="card">
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Focus time · 7 day (minute)</h3>
+        <ChartBars :data="focus7d" color="#cc785c" unit="m" />
+      </div>
+      <div class="card">
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Tasks completed · 7 day</h3>
+        <ChartBars :data="completed7d" color="#5db872" />
+      </div>
+      <div class="card">
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Task status</h3>
+        <ChartDonut :data="statusData" />
+      </div>
+      <div class="card">
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Task open with priority</h3>
+        <ChartHBars :data="priorityData" />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -88,18 +108,50 @@ const todayMinutes = ref(0)
 const sessionsToday = ref(0)
 const streak = ref(0)
 const dominantMood = ref('--')
+const allSessions = ref<any[]>([])
+
+// ── Chart data (client-side from tasks + sessions) ────────────────────────
+function last7() { return Array.from({ length: 7 }, (_, i) => dayjs().subtract(6 - i, 'day')) }
+const focus7d = computed(() => last7().map((d) => {
+  const key = d.format('YYYY-MM-DD')
+  const mins = Math.round(allSessions.value
+    .filter(s => dayjs(s.startTime).format('YYYY-MM-DD') === key)
+    .reduce((sum, s) => sum + (s.durationActual ?? s.durationPlanned ?? 0), 0) / 60)
+  return { label: d.format('dd'), value: mins }
+}))
+const completed7d = computed(() => last7().map((d) => {
+  const key = d.format('YYYY-MM-DD')
+  const n = taskStore.tasks.filter(t => t.status === 'completed' && t.completedAt && dayjs(t.completedAt).format('YYYY-MM-DD') === key).length
+  return { label: d.format('dd'), value: n }
+}))
+const statusData = computed(() => [
+  { label: 'Pending', value: taskStore.pendingTasks.length, color: '#8e8b82' },
+  { label: 'In Progress', value: taskStore.inProgressTasks.length, color: '#d4a017' },
+  { label: 'Completed', value: taskStore.completedTasks.length, color: '#5db872' },
+])
+const priorityData = computed(() => {
+  const open = taskStore.tasks.filter(t => t.status === 'pending' || t.status === 'in_progress')
+  const n = (p: number) => open.filter(t => (t.priority || 0) === p).length
+  return [
+    { label: 'High (P3)', value: n(3), color: '#cc785c' },
+    { label: 'Medium (P2)', value: n(2), color: '#cc785c' },
+    { label: 'Low (P1)', value: n(1), color: '#cc785c' },
+    { label: 'None', value: n(0), color: '#8e8b82' },
+  ]
+})
 
 onMounted(async () => { await taskStore.fetchTasks(); computeStats() })
 
 function computeStats() {
-  getSessions().then(sessions => {
+  getSessions().then((sess: any[]) => {
+    allSessions.value = sess
     const today = dayjs().format('YYYY-MM-DD')
-    const todaySessions = sessions.filter((s: any) => dayjs(s.startTime).format('YYYY-MM-DD') === today)
+    const todaySessions = sess.filter((s: any) => dayjs(s.startTime).format('YYYY-MM-DD') === today)
     sessionsToday.value = todaySessions.length
     todayMinutes.value = Math.round(todaySessions.reduce((sum: number, s: any) => sum + (s.durationActual ?? s.durationPlanned), 0) / 60)
     // Sessions come back newest-first → [0] is the latest session today.
     dominantMood.value = todaySessions[0]?.emotionLabel ?? '--'
-    let s = 0; const dates = new Set(sessions.map((x: any) => dayjs(x.startTime).format('YYYY-MM-DD')))
+    let s = 0; const dates = new Set(sess.map((x: any) => dayjs(x.startTime).format('YYYY-MM-DD')))
     for (let i = 0; i < 365; i++) {
       const d = dayjs().subtract(i, 'day').format('YYYY-MM-DD')
       if (dates.has(d)) s++

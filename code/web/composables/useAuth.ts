@@ -133,6 +133,45 @@ export function useAuth() {
     if (error) throw error
   }
 
+  // Update display name and/or email. Email is the LOGIN identity (auth.users.email),
+  // so changing it changes the sign-in address; we also keep the public.users mirror
+  // in sync. Supabase may require confirming the new email — returns emailPending in
+  // that case (the change only applies after the user confirms via the new address).
+  async function updateAccount(updates: { name?: string; email?: string }): Promise<{ emailPending: boolean }> {
+    const sb = getSupabase()
+    const uid = currentUser.value?.id
+    const currentEmail = (currentUser.value?.email || '').toLowerCase()
+    if (!uid) throw new Error('Chưa đăng nhập.')
+
+    // 1) Email → change immediately via the change_my_email RPC (migration 00012).
+    //    Avoids the client updateUser({email}) flow that some projects hold pending
+    //    for email confirmation. RPC applies the change + confirms it right away.
+    const newEmail = (updates.email || '').toLowerCase()
+    const emailChanged = !!newEmail && newEmail !== currentEmail
+    if (emailChanged) {
+      const { error } = await sb.rpc('change_my_email', { new_email: newEmail })
+      if (error) throw new Error(error.message)
+      try { await sb.auth.refreshSession() } catch { /* refresh token best-effort */ }
+    }
+
+    // 2) Name → public.users.display_name (RLS allows updating own row).
+    if (updates.name !== undefined) {
+      const { error: dbErr } = await sb.from('users').update({ display_name: updates.name }).eq('id', uid)
+      if (dbErr) throw dbErr
+    }
+
+    // 3) Refresh the local snapshot.
+    if (currentUser.value) {
+      currentUser.value = {
+        ...currentUser.value,
+        ...(updates.name !== undefined ? { name: updates.name } : {}),
+        ...(emailChanged ? { email: newEmail } : {}),
+      }
+      persistSession()
+    }
+    return { emailPending: false }
+  }
+
   function forgotPassword(_email: string): string {
     getSupabase().auth.resetPasswordForEmail(_email)
     return 'If an account exists, a password reset link has been sent to your email.'
@@ -222,7 +261,7 @@ export function useAuth() {
 
   return {
     currentUser, isAuthenticated, isAdmin, isLoading, authError,
-    signUp, login, logout, changePassword, forgotPassword,
+    signUp, login, logout, changePassword, updateAccount, forgotPassword,
     approveUser, rejectUser, getPendingUsers, getRejectedUsers, setUserStatus, syncSession,
   }
 }

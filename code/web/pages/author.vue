@@ -9,7 +9,7 @@
         <div class="flex-shrink-0">
           <div class="w-40 h-40 md:w-52 md:h-52 rounded-xl bg-canvas-card dark:bg-surface-dark-elevated border border-hairline dark:border-hairline-dark overflow-hidden flex items-center justify-center">
             <!-- Replace this div with <img> tag when you have your photo -->
-            <span class="font-display text-5xl md:text-6xl text-ink-muted dark:text-on-dark-soft select-none">FC</span>
+            <span class="font-display text-5xl md:text-6xl text-ink-muted dark:text-on-dark-soft select-none">CLT</span>
           </div>
         </div>
 
@@ -19,7 +19,7 @@
             About the creator
           </p>
           <h1 class="font-display text-display-md md:text-display-lg text-ink dark:text-on-dark mb-4">
-            Hi, I'm <span class="text-primary">Your Name</span>
+            Hi, I'm <span class="text-primary">Chi Lon Thon</span>
           </h1>
           <p class="text-ink-body dark:text-on-dark-soft leading-relaxed text-base max-w-lg">
             A passionate developer and productivity enthusiast. I built FCAJ Worklog

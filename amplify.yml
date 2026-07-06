@@ -1,0 +1,29 @@
+# AWS Amplify Hosting build spec — ĐẶT Ở REPO ROOT (github_repository/).
+# Repo là monorepo: app Nuxt nằm ở code/web. Build static SPA bằng `nuxt generate`
+# → output ở code/web/.output/public. App là Nuxt 3 SPA (routeRules ssr:false) nên
+# host TĨNH, KHÔNG dùng Amplify compute/SSR.
+#
+# Env vars NUXT_PUBLIC_* set trong Amplify Console (không commit .env).
+version: 1
+applications:
+  - appRoot: code/web
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          # NITRO_PRESET=static ép Nitro xuất SPA tĩnh ra .output/public.
+          # (Trong môi trường Amplify, Nitro mặc định chọn preset 'aws-amplify'
+          #  → ra .amplify-hosting; ta KHÔNG muốn vậy vì deploy static.)
+          commands:
+            - NITRO_PRESET=static npm run generate
+      artifacts:
+        # baseDirectory tương đối theo appRoot (code/web) → code/web/.output/public
+        baseDirectory: .output/public
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - .nuxt/**/*
