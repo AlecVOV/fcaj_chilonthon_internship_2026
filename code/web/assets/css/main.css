@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,181 +6,300 @@
 
 @layer base {
   * {
-    @apply border-neutral-400 dark:border-dark-border;
+    @apply border-hairline dark:border-hairline-dark;
   }
   body {
-    @apply bg-neutral-100 text-neutral-950 font-sans antialiased;
+    @apply bg-canvas text-ink font-sans antialiased;
     font-feature-settings: 'cv11', 'ss01';
     text-rendering: optimizeLegibility;
   }
   .dark body {
-    @apply bg-dark-bg text-dark-text;
+    @apply bg-surface-dark text-on-dark;
+  }
+
+  /* ── Display headlines use serif ── */
+  h1, h2, h3 {
+    @apply font-display font-normal tracking-tight;
   }
 }
 
 @layer components {
-  /* Card */
+  /* ═══════════════════════════════════════════
+     Card — Claude feature-card style
+     Light: cream card (#efe9de), no shadow
+     Dark:  elevated navy (#252320)
+     ═══════════════════════════════════════════ */
   .card {
-    @apply bg-white border border-neutral-200 rounded shadow-subtle p-5;
+    @apply bg-canvas-card border border-hairline rounded-lg p-6;
   }
   .dark .card {
-    @apply bg-dark-card border-dark-border shadow-subtle-dark;
+    @apply bg-surface-dark-elevated border-hairline-dark;
   }
 
-  /* Input */
+  /* ═══════════════════════════════════════════
+     Input — Claude text-input style
+     ═══════════════════════════════════════════ */
   .input {
-    @apply w-full rounded border border-neutral-400 bg-white px-3 py-2 text-sm text-neutral-950
-           placeholder:text-neutral-400
-           focus:border-interactive-blue focus:outline-none focus:ring-1 focus:ring-interactive-blue/30
+    @apply w-full rounded-md border border-hairline bg-canvas px-3.5 py-2.5
+           text-sm text-ink font-sans
+           placeholder:text-ink-muted/50
+           focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20
            transition-colors;
   }
   .dark .input {
-    @apply bg-dark-surface border-dark-border text-dark-text placeholder:text-white/25
-           focus:border-interactive-blue;
+    @apply bg-surface-dark-soft border-hairline-dark text-on-dark
+           placeholder:text-on-dark-soft/50
+           focus:border-primary;
   }
 
-  /* Primary Button */
+  /* ═══════════════════════════════════════════
+     Primary Button — Coral CTA
+     ═══════════════════════════════════════════ */
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded bg-interactive-blue px-4 py-2
-           text-sm font-medium text-white
-           hover:bg-interactive-blue/90
-           active:bg-interactive-blue/80
-           disabled:opacity-40 disabled:cursor-not-allowed
+    @apply inline-flex items-center justify-center rounded-md bg-primary
+           px-5 py-2.5 text-sm font-medium text-white
+           hover:bg-primary-active
+           active:bg-primary-active
+           disabled:bg-primary-disabled disabled:text-ink-muted disabled:cursor-not-allowed
            transition-colors;
   }
 
-  /* Outline Button */
+  /* ═══════════════════════════════════════════
+     Outline / Secondary Button — Cream button
+     ═══════════════════════════════════════════ */
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded border border-neutral-400
-           bg-transparent px-4 py-2 text-sm font-medium text-neutral-950
-           hover:bg-neutral-150
-           active:bg-neutral-200
+    @apply inline-flex items-center justify-center rounded-md border border-hairline
+           bg-canvas px-5 py-2.5 text-sm font-medium text-ink
+           hover:bg-canvas-card
+           active:bg-canvas-strong
            disabled:opacity-40 disabled:cursor-not-allowed
            transition-colors;
   }
   .dark .btn-outline {
-    @apply border-dark-border text-dark-text hover:bg-dark-surface active:bg-dark-card;
+    @apply border-hairline-dark bg-surface-dark-elevated text-on-dark
+           hover:bg-surface-dark-soft active:bg-surface-dark;
   }
 
-  /* Ghost Button */
+  /* ═══════════════════════════════════════════
+     Ghost Button
+     ═══════════════════════════════════════════ */
   .btn-ghost {
-    @apply inline-flex items-center justify-center rounded bg-transparent px-4 py-2
-           text-sm font-medium text-neutral-950
-           hover:bg-neutral-150
-           active:bg-neutral-200
+    @apply inline-flex items-center justify-center rounded-md bg-transparent
+           px-5 py-2.5 text-sm font-medium text-ink
+           hover:bg-canvas-card
+           active:bg-canvas-strong
            transition-colors;
   }
   .dark .btn-ghost {
-    @apply text-dark-text hover:bg-dark-surface active:bg-dark-card;
+    @apply text-on-dark hover:bg-surface-dark-soft active:bg-surface-dark;
   }
 
-  /* Danger Button */
+  /* ═══════════════════════════════════════════
+     Danger Button
+     ═══════════════════════════════════════════ */
   .btn-danger {
-    @apply inline-flex items-center justify-center rounded bg-critical px-4 py-2
+    @apply inline-flex items-center justify-center rounded-md bg-error px-5 py-2.5
            text-sm font-medium text-white
-           hover:bg-critical/90 active:bg-critical/80
+           hover:bg-error/90 active:bg-error/80
            disabled:opacity-40 disabled:cursor-not-allowed
            transition-colors;
   }
   .dark .btn-danger {
-    @apply bg-critical-dark hover:bg-critical-dark/90;
+    @apply bg-error-muted hover:bg-error-muted/90;
   }
 
-  /* Badge */
+  /* ═══════════════════════════════════════════
+     Text Link
+     ═══════════════════════════════════════════ */
+  .link {
+    @apply text-primary hover:underline transition-colors;
+  }
+
+  /* ═══════════════════════════════════════════
+     Divider
+     ═══════════════════════════════════════════ */
+  .divider {
+    @apply border-t border-hairline;
+  }
+  .dark .divider {
+    @apply border-hairline-dark;
+  }
+
+  /* ═══════════════════════════════════════════
+     Table — Claude workspace table
+     ═══════════════════════════════════════════ */
+  .table-base {
+    @apply w-full text-sm;
+  }
+  .table-base thead th {
+    @apply bg-canvas-card border-b border-hairline px-5 py-3 text-left text-2xs
+           font-medium uppercase tracking-wider text-ink-muted;
+  }
+  .dark .table-base thead th {
+    @apply bg-surface-dark-soft border-hairline-dark text-on-dark-soft;
+  }
+  .table-base tbody td {
+    @apply border-b border-hairline px-5 py-3 text-sm;
+  }
+  .dark .table-base tbody td {
+    @apply border-hairline-dark;
+  }
+  .table-base tbody tr:hover td {
+    @apply bg-canvas-card/50;
+  }
+  .dark .table-base tbody tr:hover td {
+    @apply bg-surface-dark-soft/50;
+  }
+
+  /* ═══════════════════════════════════════════
+     Navbar — Dark navy top bar
+     ═══════════════════════════════════════════ */
+  .navbar {
+    @apply bg-surface-dark text-on-dark;
+  }
+
+  /* ═══════════════════════════════════════════
+     Tabs — Category-tab style
+     ═══════════════════════════════════════════ */
+  .tab {
+    @apply inline-flex items-center border-b-2 border-transparent px-4 py-2.5
+           text-sm font-medium text-ink-muted hover:text-ink transition-colors;
+  }
+  .tab-active {
+    @apply border-primary text-ink;
+  }
+  .dark .tab {
+    @apply text-on-dark-soft hover:text-on-dark;
+  }
+  .dark .tab-active {
+    @apply border-primary text-on-dark;
+  }
+
+  /* ═══════════════════════════════════════════
+     Badge — Pill badges
+     ═══════════════════════════════════════════ */
   .badge {
-    @apply inline-flex items-center rounded px-2 py-0.5 text-2xs font-medium;
+    @apply inline-flex items-center rounded-pill px-2.5 py-0.5 text-2xs font-medium;
   }
   .badge-success {
     @apply bg-success/15 text-success;
   }
   .dark .badge-success {
-    @apply bg-success-dark/20 text-success-dark;
+    @apply bg-success-muted/20 text-success;
   }
   .badge-warning {
     @apply bg-warning/15 text-warning;
   }
   .dark .badge-warning {
-    @apply bg-warning-dark/20 text-warning-dark;
+    @apply bg-warning-muted/20 text-warning;
   }
-  .badge-critical {
-    @apply bg-critical/15 text-critical;
+  .badge-error {
+    @apply bg-error/15 text-error;
   }
-  .dark .badge-critical {
-    @apply bg-critical-dark/20 text-critical-dark;
+  .dark .badge-error {
+    @apply bg-error-muted/20 text-error;
   }
-
-  /* Link */
-  .link {
-    @apply text-interactive-blue hover:underline transition-colors;
+  .badge-coral {
+    @apply bg-primary text-white;
   }
 
-  /* Divider */
-  .divider {
-    @apply border-t border-neutral-200;
-  }
-  .dark .divider {
-    @apply border-dark-border;
-  }
-
-  /* Table */
-  .table-base {
-    @apply w-full text-sm;
-  }
-  .table-base thead th {
-    @apply bg-neutral-150 border-b border-neutral-200 px-4 py-3 text-left text-2xs font-medium
-           uppercase tracking-wider text-neutral-950/50;
-  }
-  .dark .table-base thead th {
-    @apply bg-dark-surface border-dark-border text-white/40;
-  }
-  .table-base tbody td {
-    @apply border-b border-neutral-200 px-4 py-3 text-sm;
-  }
-  .dark .table-base tbody td {
-    @apply border-dark-border;
-  }
-  .table-base tbody tr:hover td {
-    @apply bg-neutral-100;
-  }
-  .dark .table-base tbody tr:hover td {
-    @apply bg-dark-surface/50;
-  }
-
-  /* Navbar */
-  .navbar {
-    @apply bg-squid-ink text-white;
-  }
-
-  /* Tabs */
-  .tab {
-    @apply inline-flex items-center border-b-2 border-transparent px-4 py-2.5 text-sm
-           font-medium text-neutral-950/50 hover:text-neutral-950 transition-colors;
-  }
-  .tab-active {
-    @apply border-interactive-blue text-interactive-blue;
-  }
-  .dark .tab {
-    @apply text-white/40 hover:text-white/70;
-  }
-  .dark .tab-active {
-    @apply border-interactive-blue text-interactive-blue;
-  }
-
-  /* Status Dot */
+  /* ═══════════════════════════════════════════
+     Status Dot
+     ═══════════════════════════════════════════ */
   .status-dot {
     @apply inline-block h-2 w-2 rounded-full;
   }
   .status-dot.online { @apply bg-success; }
-  .status-dot.offline { @apply bg-critical; }
-  .dark .status-dot.online { @apply bg-success-dark; }
-  .dark .status-dot.offline { @apply bg-critical-dark; }
+  .status-dot.offline { @apply bg-error; }
+  .dark .status-dot.online { @apply bg-success-muted; }
+  .dark .status-dot.offline { @apply bg-error-muted; }
 
-  /* Animation */
+  /* ═══════════════════════════════════════════
+     Callout cards — Coral & Dark CTA bands
+     ═══════════════════════════════════════════ */
+  .callout-coral {
+    @apply bg-primary text-white rounded-lg p-xxl;
+  }
+  .callout-dark {
+    @apply bg-surface-dark text-on-dark rounded-lg p-xxl;
+  }
+
+  /* ═══════════════════════════════════════════
+     Cookie / Toast
+     ═══════════════════════════════════════════ */
+  .toast-card {
+    @apply bg-surface-dark text-on-dark rounded-lg p-6 border border-hairline-dark;
+  }
+
+  /* ═══════════════════════════════════════════
+     Animation
+     ═══════════════════════════════════════════ */
   .animate-in {
     animation: fadeIn 0.2s ease-out;
   }
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ═══════════════════════════════════════════
+     Sticky Scroll Zoom — clip-path expansion
+     ═══════════════════════════════════════════ */
+
+  /* Outer wrapper — defines the scroll distance */
+  .sticky-zoom-wrapper {
+    position: relative;
+  }
+
+  /* The sticky full-bleed container — NO clip-path, full screen */
+  .sticky-zoom-content {
+    --zoom-progress: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+    z-index: 1;
+    transition: none !important;
+    /* Background set via Tailwind on this element */
+  }
+
+  /* Background child — fills content, clip-path does the card→fullscreen expansion */
+  .sticky-zoom-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    transition: none !important;
+    will-change: clip-path;
+
+    --x0: calc(var(--inset-x, 0.06) * (1 - var(--zoom-progress)));
+    --y0: calc(var(--inset-y, 0.05) * (1 - var(--zoom-progress)));
+    --r:  calc(32px * (1 - var(--zoom-progress)));
+    clip-path: inset(
+      calc(var(--y0) * 100%)
+      calc(var(--x0) * 100%)
+      round var(--r)
+    );
+  }
+
+  /* Fade-in constrained content body */
+  .sticky-zoom-body {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: calc(0.3 + 0.7 * var(--zoom-progress));
+    transition: none !important;
+    pointer-events: none;
+  }
+  .sticky-zoom-body > * {
+    pointer-events: auto;
+  }
+
+  /* Prevent scroll-behavior: smooth from interfering with RAF */
+  html {
+    scroll-behavior: auto !important;
   }
 }

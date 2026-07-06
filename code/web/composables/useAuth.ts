@@ -1,149 +1,228 @@
 // composables/useAuth.ts
 //
-// Auth service — approval workflow:
-//   1. User signs up → status = 'pending' → admin must approve
-//   2. Admin approves → auto-generates OTP → user receives it (simulated)
-//   3. User logs in with email + OTP → forced to change password
-//   4. After change → permanent password, normal login
+// Cloud-only auth — Supabase Auth + public.users (role + approval status).
+//   - Sign up:   supabase.auth.signUp (user sets their own password)
+//   - Login:     supabase.auth.signInWithPassword, then gate on public.users.status
+//                (pending / rejected users are blocked; admins always allowed)
+//   - Role:      public.users.role  (admin = role 'admin' in the DB — matches RLS is_admin())
+//   - Approval:  approveUser / rejectUser update public.users.status (admin only, via RLS)
+//
+// Session is persisted both by the Supabase SDK and a lightweight localStorage
+// snapshot (focus_auth_user) so the UI restores instantly on reload.
 
 import { ref, computed } from 'vue'
-import { useConfig } from '~/composables/useConfig'
+import { getSupabase } from '~/lib/supabaseClient'
 
-// ── Types ─────────────────────────────────────────────────────────────────
 export interface AuthUser {
-  id: string; email: string; role: 'admin' | 'user'; name: string
+  id: string
+  email: string
+  role: 'admin' | 'user'
+  name: string
   status: 'pending' | 'approved' | 'rejected'
-  requiresPasswordChange: boolean
-  oneTimePassword?: string
 }
 
 export interface PendingUser {
-  id: string; email: string; name: string; status: 'pending' | 'approved' | 'rejected'
-  requestedAt: string; approvedAt?: string
+  id: string
+  email: string
+  name: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedAt: string
+  approvedAt?: string
 }
 
-// ── Admin ────────────────────────────────────────────────────────────────
-const ADMIN = { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', email: 'admin@focusmode.app', password: 'admin123', role: 'admin' as const, name: 'Admin' }
-
-// ── State ─────────────────────────────────────────────────────────────────
+// ── Shared state ────────────────────────────────────────────────────────────
 const currentUser = ref<AuthUser | null>(null)
 const isLoading = ref(false)
 const authError = ref<string | null>(null)
-const pendingUsers: PendingUser[] = []
-const userCredentials: Record<string, { password: string; otpUsed: boolean }> = {}
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-function restoreSession(): boolean {
-  if (import.meta.server) return false
-  try { const s = localStorage.getItem('focus_auth_user'); if (s) { currentUser.value = JSON.parse(s); return true } } catch {}
-  return false
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function persistSession() {
+  if (!import.meta.server) localStorage.setItem('focus_auth_user', JSON.stringify(currentUser.value))
+}
+function restoreSession() {
+  if (import.meta.server) return
+  try { const s = localStorage.getItem('focus_auth_user'); if (s) currentUser.value = JSON.parse(s) } catch { /* ignore */ }
 }
 
-function genOTP(): string { return Math.random().toString(36).slice(2, 8).toUpperCase() }
-
-// ── Composable ────────────────────────────────────────────────────────────
+// ── Composable ──────────────────────────────────────────────────────────────
 export function useAuth() {
-  const { useMockBackend } = useConfig()
   if (!import.meta.server && !currentUser.value) restoreSession()
 
   const isAuthenticated = computed(() => currentUser.value !== null)
   const isAdmin = computed(() => currentUser.value?.role === 'admin')
-  const needsPasswordChange = computed(() => currentUser.value?.requiresPasswordChange === true)
 
-  // ── Sign Up (creates pending request) ───────────────────────────────────
-  async function signUp(name: string, email: string): Promise<void> {
-    isLoading.value = true; authError.value = null
-    try {
-      await new Promise(r => setTimeout(r, 400))
-      if (pendingUsers.find(u => u.email === email)) throw new Error('A request already exists for this email.')
-      pendingUsers.push({ id: crypto.randomUUID(), email: email.toLowerCase(), name, status: 'pending', requestedAt: new Date().toISOString() })
-    } catch (e: any) { authError.value = e?.message || 'Sign-up failed'; throw e }
-    finally { isLoading.value = false }
-  }
-
-  // ── Admin: Approve → generates OTP ─────────────────────────────────────
-  function approveUser(userId: string): string {
-    const u = pendingUsers.find(p => p.id === userId); if (!u) throw new Error('User not found')
-    u.status = 'approved'; u.approvedAt = new Date().toISOString()
-    const otp = genOTP()
-    userCredentials[u.email] = { password: otp, otpUsed: false }
-    return otp // In production: email this to user
-  }
-
-  // ── Admin: Reject ──────────────────────────────────────────────────────
-  function rejectUser(userId: string): void {
-    const u = pendingUsers.find(p => p.id === userId); if (u) u.status = 'rejected'
-  }
-
-  function getPendingUsers(): PendingUser[] { return [...pendingUsers] }
-
-  // ── Login ───────────────────────────────────────────────────────────────
-  async function login(email: string, password: string): Promise<AuthUser> {
-    isLoading.value = true; authError.value = null
-    try {
-      await new Promise(r => setTimeout(r, 400))
-      const key = email.toLowerCase()
-
-      // Admin
-      if (key === ADMIN.email && password === ADMIN.password) {
-        const u: AuthUser = { id: ADMIN.id, email: ADMIN.email, role: ADMIN.role, name: ADMIN.name, status: 'approved', requiresPasswordChange: false }
-        currentUser.value = u; if (!import.meta.server) localStorage.setItem('focus_auth_user', JSON.stringify(u))
-        return u
-      }
-
-      // Regular user flow
-      const pending = pendingUsers.find(p => p.email === key)
-      if (!pending || pending.status === 'pending') throw new Error('Your account is pending admin approval. Please wait.')
-      if (pending.status === 'rejected') throw new Error('Your account request was rejected.')
-
-      const cred = userCredentials[key]
-      if (!cred || password !== cred.password) throw new Error('Invalid email or password.')
-
-      // First login with OTP → must change password
-      if (!cred.otpUsed) {
-        cred.otpUsed = true
-        const u: AuthUser = { id: pending.id, email: pending.email, role: 'user', name: pending.name, status: 'approved', requiresPasswordChange: true, oneTimePassword: cred.password }
-        currentUser.value = u; if (!import.meta.server) localStorage.setItem('focus_auth_user', JSON.stringify(u))
-        return u
-      }
-
-      // Normal login
-      const u: AuthUser = { id: pending.id, email: pending.email, role: 'user', name: pending.name, status: 'approved', requiresPasswordChange: false }
-      currentUser.value = u; if (!import.meta.server) localStorage.setItem('focus_auth_user', JSON.stringify(u))
-      return u
-    } catch (e: any) { authError.value = e?.message || 'Login failed'; throw e }
-    finally { isLoading.value = false }
-  }
-
-  // ── Change Password ─────────────────────────────────────────────────────
-  function changePassword(newPassword: string): void {
-    if (!currentUser.value) throw new Error('Not logged in')
-    userCredentials[currentUser.value.email.toLowerCase()] = { password: newPassword, otpUsed: true }
-    currentUser.value.requiresPasswordChange = false
-    if (!import.meta.server) localStorage.setItem('focus_auth_user', JSON.stringify(currentUser.value))
-  }
-
-  // ── Forgot Password (generates new OTP) ─────────────────────────────────
-  function forgotPassword(email: string): string {
+  async function signUp(name: string, email: string, password?: string) {
     const key = email.toLowerCase()
-    const pending = pendingUsers.find(p => p.email === key)
-    if (!pending || pending.status !== 'approved') throw new Error('Account not found or not approved.')
-    const otp = genOTP()
-    userCredentials[key] = { password: otp, otpUsed: false }
-    return otp
+    if (key === 'admin@focusmode.app' || key === 'user@focusmode.app') {
+      throw new Error('This is a demo account. Please use Sign In with the pre-set password.')
+    }
+    const sb = getSupabase()
+    const { data, error } = await sb.auth.signUp({
+      email,
+      password: password || '',
+      options: { data: { display_name: name } },
+    })
+    if (error) throw error
+    // public.users row is created by the DB trigger (status='pending').
+    return data
   }
 
-  // ── Logout ──────────────────────────────────────────────────────────────
-  async function logout(): Promise<void> {
-    currentUser.value = null; if (!import.meta.server) localStorage.removeItem('focus_auth_user')
+  async function login(email: string, password: string): Promise<AuthUser> {
+    isLoading.value = true
+    authError.value = null
+    try {
+      const sb = getSupabase()
+      const { data, error } = await sb.auth.signInWithPassword({ email, password })
+      if (error) throw error
+      if (!data.user) throw new Error('Login failed')
+
+      const { data: profile } = await sb
+        .from('users')
+        .select('role, status, display_name')
+        .eq('id', data.user.id)
+        .single()
+
+      const admin = profile?.role === 'admin'
+      const status = (profile?.status as AuthUser['status']) || 'pending'
+
+      // Approval gate — admins always allowed; everyone else must be approved.
+      if (!admin) {
+        if (status === 'pending') { await sb.auth.signOut(); throw new Error('Your account is pending admin approval.') }
+        if (status === 'rejected') { await sb.auth.signOut(); throw new Error('Your account request was rejected.') }
+      }
+
+      const u: AuthUser = {
+        id: data.user.id,
+        email: data.user.email!,
+        role: admin ? 'admin' : 'user',
+        name: (profile?.display_name as string)
+          || (data.user.user_metadata?.display_name as string)
+          || data.user.email!.split('@')[0],
+        status: admin ? 'approved' : status,
+      }
+      currentUser.value = u
+      persistSession()
+      return u
+    } catch (e: any) {
+      authError.value = e?.message || 'Login failed'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function logout() {
+    const sb = getSupabase()
+    await sb.auth.signOut()
+    currentUser.value = null
+    if (!import.meta.server) localStorage.removeItem('focus_auth_user')
     navigateTo('/login')
   }
 
+  async function changePassword(newPassword: string, currentPassword?: string) {
+    const sb = getSupabase()
+    // Re-authenticate to verify the CURRENT password before changing it.
+    if (currentPassword && currentUser.value?.email) {
+      const { error: verifyErr } = await sb.auth.signInWithPassword({
+        email: currentUser.value.email,
+        password: currentPassword,
+      })
+      if (verifyErr) throw new Error('Mật khẩu hiện tại không đúng.')
+    }
+    const { error } = await sb.auth.updateUser({ password: newPassword })
+    if (error) throw error
+  }
+
+  function forgotPassword(_email: string): string {
+    getSupabase().auth.resetPasswordForEmail(_email)
+    return 'If an account exists, a password reset link has been sent to your email.'
+  }
+
+  // ── Admin user-management (Supabase-backed; gated by RLS is_admin()) ───────
+  async function getPendingUsers(): Promise<PendingUser[]> {
+    const sb = getSupabase()
+    const { data, error } = await sb
+      .from('users')
+      .select('id, email, display_name, status, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    if (error) throw new Error(`Cannot load pending users: ${error.message}`)
+    return (data || []).map(u => ({
+      id: u.id,
+      email: u.email,
+      name: (u.display_name as string) || u.email.split('@')[0],
+      status: u.status as PendingUser['status'],
+      requestedAt: u.created_at,
+    }))
+  }
+
+  async function approveUser(userId: string): Promise<void> {
+    const sb = getSupabase()
+    const { error } = await sb.from('users').update({ status: 'approved' }).eq('id', userId)
+    if (error) throw error
+  }
+
+  async function rejectUser(userId: string): Promise<void> {
+    const sb = getSupabase()
+    const { error } = await sb.from('users').update({ status: 'rejected' }).eq('id', userId)
+    if (error) throw error
+  }
+
+  async function getRejectedUsers(): Promise<PendingUser[]> {
+    const sb = getSupabase()
+    const { data, error } = await sb
+      .from('users')
+      .select('id, email, display_name, status, created_at')
+      .eq('status', 'rejected')
+      .order('created_at', { ascending: false })
+    if (error) throw new Error(`Cannot load rejected users: ${error.message}`)
+    return (data || []).map(u => ({
+      id: u.id, email: u.email,
+      name: (u.display_name as string) || u.email.split('@')[0],
+      status: u.status as PendingUser['status'], requestedAt: u.created_at,
+    }))
+  }
+
+  async function setUserStatus(userId: string, status: AuthUser['status']): Promise<void> {
+    const sb = getSupabase()
+    const { error } = await sb.from('users').update({ status }).eq('id', userId)
+    if (error) throw error
+  }
+
+  // Re-validate the cached session against Supabase on app start: role/status may
+  // have changed (demote / reject / revoke) or the token may have expired, so a
+  // stale localStorage snapshot shouldn't keep granting access.
+  async function syncSession(): Promise<void> {
+    if (import.meta.server) return
+    const sb = getSupabase()
+    const { data: { session } } = await sb.auth.getSession()
+    if (!session?.user) {
+      if (currentUser.value) { currentUser.value = null; localStorage.removeItem('focus_auth_user'); navigateTo('/login') }
+      return
+    }
+    const { data: profile } = await sb
+      .from('users').select('role, status, display_name').eq('id', session.user.id).single()
+    const admin = profile?.role === 'admin'
+    const status = (profile?.status as AuthUser['status']) || 'pending'
+    if (!admin && status !== 'approved') {
+      await sb.auth.signOut()
+      currentUser.value = null
+      localStorage.removeItem('focus_auth_user')
+      navigateTo('/login')
+      return
+    }
+    currentUser.value = {
+      id: session.user.id, email: session.user.email!,
+      role: admin ? 'admin' : 'user',
+      name: (profile?.display_name as string) || session.user.email!.split('@')[0],
+      status: admin ? 'approved' : status,
+    }
+    persistSession()
+  }
+
   return {
-    currentUser, isAuthenticated, isAdmin, needsPasswordChange,
-    isLoading, authError,
-    signUp, login, logout, restoreSession,
-    approveUser, rejectUser, getPendingUsers,
-    changePassword, forgotPassword,
+    currentUser, isAuthenticated, isAdmin, isLoading, authError,
+    signUp, login, logout, changePassword, forgotPassword,
+    approveUser, rejectUser, getPendingUsers, getRejectedUsers, setUserStatus, syncSession,
   }
 }

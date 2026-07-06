@@ -1,8 +1,8 @@
 <template>
   <div class="animate-in h-full">
     <div class="mb-4">
-      <h1 class="text-xl font-bold text-neutral-950 dark:text-dark-text">Task Assistant</h1>
-      <p class="mt-1 text-sm text-neutral-950/40 dark:text-white/30">
+      <h1 class="font-display text-display-sm text-ink dark:text-on-dark">Task Assistant</h1>
+      <p class="mt-1.5 text-sm text-ink-body dark:text-on-dark-soft">
         Describe what you need to get done — the agent will create tasks or ask clarifying questions.
       </p>
     </div>

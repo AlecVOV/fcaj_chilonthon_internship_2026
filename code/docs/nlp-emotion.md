@@ -1,11 +1,15 @@
 # NLP Emotion Detection — Model & Pipeline
 
+> Cập nhật 2026-06-29 — đồng bộ với bản cài đặt hiện tại (trạng thái implement đã ghi rõ).
+
 > **Project:** Focus Mode App  
 > **Model:** `distilbert-base-uncased-emotion` (quantized ONNX)  
 > **Labels:** 5 categories — `focused`, `stressed`, `exhausted`, `relaxed`, `unmotivated`  
 > **Runtime:** AWS Lambda (Python 3.12) with ONNX Runtime  
 > **Input:** Journal text (max 1000 chars)  
 > **Output:** Emotion label + confidence score  
+
+> **Status (2026-06-29):** Đây là **SPEC**. Lambda `emotion-detector` mới chỉ có **README** (chưa có `lambda_function.py`); layer `onnx-transformers` chỉ là spec; API Gateway có spec nhưng **CHƯA deploy**. Trên thực tế, nhận diện cảm xúc hiện chạy **fallback regex client-side** trong `web/composables/useEmotionDetector.ts`: nếu có `NUXT_PUBLIC_API_GATEWAY_URL` thì `POST {API}/emotion`, nếu không thì phân loại bằng biểu thức chính quy ngay trên trình duyệt (hiện chỉ phát ra focused/stressed/exhausted/relaxed; chưa có nhánh `unmotivated` ở fallback, mặc định về `focused`). Backend khi deploy sẽ ghi `emotion_label` + `emotion_confidence` vào `public.focus_sessions` của Supabase (cloud-only).
 
 ---
 

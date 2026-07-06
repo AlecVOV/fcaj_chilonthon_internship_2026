@@ -1,31 +1,31 @@
 <template>
   <div class="text-center space-y-4">
-    <p v-if="!store.isIdle && !store.isFinished" class="text-2xs uppercase tracking-wider text-neutral-950/30 dark:text-white/20">
+    <p v-if="!store.isIdle && !store.isFinished" class="text-2xs uppercase tracking-wider text-ink-soft dark:text-on-dark-soft">
       Timer
     </p>
-    <p v-else class="text-2xs uppercase tracking-wider text-neutral-950/30 dark:text-white/20">
+    <p v-else class="text-2xs uppercase tracking-wider text-ink-soft dark:text-on-dark-soft">
       Start a Focus Session
     </p>
 
     <!-- Timer Display -->
-    <p class="text-4xl font-bold tabular-nums text-neutral-950 dark:text-dark-text tracking-tight" v-if="!store.isIdle && !store.isFinished">
+    <p class="font-mono text-4xl font-normal tabular-nums text-ink dark:text-on-dark tracking-tight" v-if="!store.isIdle && !store.isFinished">
       {{ store.displayTime }}
     </p>
-    <p v-else class="text-4xl font-bold tabular-nums text-neutral-950/20 dark:text-white/10">
+    <p v-else class="font-mono text-4xl font-normal tabular-nums text-ink-soft/30 dark:text-on-dark-soft/30">
       {{ store.status === 'finished' ? '00:00' : '--:--' }}
     </p>
 
     <!-- Progress bar (when running) -->
-    <div v-if="!store.isIdle && !store.isFinished" class="h-1.5 rounded bg-neutral-200 dark:bg-dark-border overflow-hidden">
+    <div v-if="!store.isIdle && !store.isFinished" class="h-1.5 rounded-full bg-hairline dark:bg-hairline-dark overflow-hidden">
       <div
-        class="h-full rounded bg-interactive-blue transition-all duration-1000"
+        class="h-full rounded-full bg-primary transition-all duration-1000"
         :style="{ width: `${store.progress * 100}%` }"
       />
     </div>
 
     <!-- Quick Start Button -->
     <div v-if="store.isIdle || store.isFinished">
-      <NuxtLink to="/focus" class="btn-primary text-sm">
+      <NuxtLink to="/focus" class="btn-primary">
         Go to Focus
       </NuxtLink>
     </div>
@@ -35,14 +35,14 @@
       <button
         v-if="store.isRunning"
         @click="store.pause()"
-        class="btn-outline text-xs"
+        class="btn-outline text-sm"
       >
         Pause
       </button>
       <button
         v-if="store.isPaused"
         @click="store.resume()"
-        class="btn-primary text-xs"
+        class="btn-primary text-sm"
       >
         Resume
       </button>

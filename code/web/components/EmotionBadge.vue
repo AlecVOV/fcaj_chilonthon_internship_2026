@@ -12,5 +12,5 @@ defineProps<{
   label: string
 }>()
 
-const badgeClass = 'badge-success' // neutral default
+const badgeClass = 'badge-coral'
 </script>

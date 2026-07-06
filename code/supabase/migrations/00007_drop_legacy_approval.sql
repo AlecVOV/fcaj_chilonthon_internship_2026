@@ -1,0 +1,22 @@
+-- ============================================================================
+-- 00007_drop_legacy_approval.sql
+-- Remove the orphaned "invite-by-email" approval flow.
+--
+-- The app's live approval flow is entirely based on public.users.status
+-- (added in 00006) and is driven from the front-end:
+--   • sign-up  → handle_new_user() inserts users.status = 'pending'
+--   • admin    → getPendingUsers() / approveUser() / rejectUser()
+--   • security → RLS via is_admin()
+--
+-- The following were leftovers from an earlier design and are NOT used anywhere:
+--   • public.user_requests        (created in 00005, never read/written by app)
+--   • functions/approve-user/     (Edge Function — deleted from the repo)
+--   • a public.profiles table     (referenced by that Edge Function, never created)
+--
+-- Dropping the unused table also closes a security hole: it was created in 00005
+-- WITHOUT row-level security, so PostgREST exposed it to every authenticated user.
+--
+-- Run in: Supabase SQL Editor (after 00005/00006). Safe to re-run (idempotent).
+-- ============================================================================
+
+DROP TABLE IF EXISTS public.user_requests CASCADE;

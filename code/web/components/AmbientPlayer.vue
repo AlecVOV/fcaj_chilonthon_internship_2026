@@ -1,19 +1,21 @@
 <template>
   <div class="space-y-2">
-    <p class="text-2xs font-medium uppercase tracking-wider text-neutral-950/40 dark:text-white/25">Ambient Sound</p>
+    <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Ambient Sound</p>
     <div class="flex gap-1.5 flex-wrap">
       <button
         v-for="track in tracks"
         :key="track.id"
-        @click="$emit('select', track.id === 'none' ? null : track.id)"
-        class="rounded border px-2.5 py-1 text-xs transition-colors"
+        type="button"
+        @click="$emit('update:modelValue', track.id === 'none' ? null : track.id)"
+        class="rounded-md border px-2.5 py-1 text-sm transition-colors"
         :class="(modelValue === track.id || (track.id === 'none' && !modelValue))
-          ? 'border-interactive-blue bg-interactive-blue/10 text-interactive-blue dark:bg-interactive-blue/20'
-          : 'border-neutral-200 dark:border-dark-border text-neutral-950 dark:text-dark-text hover:bg-neutral-150 dark:hover:bg-dark-surface'"
+          ? 'border-primary bg-primary/10 text-primary dark:bg-primary/20'
+          : 'border-hairline dark:border-hairline-dark text-ink dark:text-on-dark hover:bg-canvas-card dark:hover:bg-surface-dark-soft'"
       >
         {{ track.label }}
       </button>
     </div>
+    <p class="text-2xs text-ink-soft dark:text-on-dark-soft/70">Plays during your focus session (synthesized, no download).</p>
   </div>
 </template>
 
@@ -23,13 +25,14 @@ defineProps<{
 }>()
 
 defineEmits<{
-  select: [trackId: string | null]
+  'update:modelValue': [trackId: string | null]
 }>()
 
+// Ids must match the presets synthesized in composables/useAmbientSound.ts
 const tracks = [
   { id: 'none', label: 'Silence' },
-  { id: 'minecraft', label: 'Minecraft' },
   { id: 'rain', label: 'Rain' },
   { id: 'cafe', label: 'Cafe' },
+  { id: 'waves', label: 'Waves' },
 ]
 </script>

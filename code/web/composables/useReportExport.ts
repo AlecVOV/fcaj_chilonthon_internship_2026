@@ -163,7 +163,7 @@ export function useReportExport() {
         'MOOD-SUMMARY-TEXT': getMoodSummary(dominantEmotion),
         'AI-SUGGESTIONS-BLOCK': '- Schedule deep work during your peak focus hours.\n- Try 25/5 Pomodoro cycles for sustained concentration.',
         'RAG-RECOMMENDATIONS-BLOCK': '- **On Patience** (sutra) — Lamrim Class 2023\n- **5‑Minute Breathing** (video) — Self‑Help',
-        'APP-URL': 'https://focusmode.app',
+        'APP-URL': 'https://focusmode.click',
       }
 
       // Render Markdown

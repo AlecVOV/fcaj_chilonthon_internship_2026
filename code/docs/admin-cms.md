@@ -1,9 +1,11 @@
 # Admin CMS — Nuxt 4 Dashboard (Role-Gated)
 
+> Cập nhật 2026-07-06 — đồng bộ với bản cài đặt cloud-only hiện tại (thêm nhóm Rejected users).
+
 > **Project:** Focus Mode App (Web-Only)  
 > **Platform:** Nuxt 4 (same codebase as main app, admin middleware)  
-> **Access:** Admin-only (Supabase RLS + `app_metadata.role === 'admin'`)  
-> **Core Features:** Media library CRUD + Vectorization trigger + Aggregated stats  
+> **Access:** Admin-only (`public.users.role === 'admin'` + Supabase RLS `is_admin()`)  
+> **Core Features:** User approval & role management + Media library CRUD + Embedding trigger  
 
 ---
 
@@ -18,560 +20,256 @@
 │                                                    │
 │  ┌──────────────────────────────────┐            │
 │  │  middleware/admin.ts              │            │
-│  │  Checks authStore.isAdmin         │            │
+│  │  Checks useAuth().isAdmin         │            │
 │  │  Redirects non-admin to /dashboard│            │
 │  └──────────────────────────────────┘            │
 │                                                    │
 │  Admin Pages:                                      │
-│  ┌─────────────┐  ┌──────────────┐               │
-│  │ Dashboard    │  │ Media Library │               │
-│  │ (Stats)      │  │ Manager       │               │
-│  └─────────────┘  └──────┬───────┘               │
-│                          │                         │
-│         POST /api/admin/vectorize                   │
-│         (Nitro server proxy → Lambda)               │
-└──────────────────────────┼────────────────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │  API Gateway  │
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────────┐
-                    │  focus-admin-     │
-                    │  vectorize Lambda │
-                    └──────┬───────────┘
-                           │
-                    ┌──────▼───────────┐
-                    │  Supabase         │
-                    │  media_library    │
-                    │  (pgvector)       │
-                    └──────────────────┘
+│  ┌──────────┐ ┌────────────┐ ┌──────────────┐   │
+│  │ Overview  │ │ Users       │ │ Media Library │   │
+│  │ (links)   │ │ (approve/   │ │ Manager       │   │
+│  │           │ │  role/del)  │ │ (CRUD+embed)  │   │
+│  └──────────┘ └─────┬──────┘ └──────┬───────┘   │
+│                     │                │             │
+│        Supabase JS  │   generateEmbedding()        │
+│        (RLS-gated)  │   → API Gateway              │
+└─────────────────────┼────────────────┼────────────┘
+                      │                │
+               ┌──────▼──────┐  ┌──────▼───────┐
+               │  Supabase    │  │  API Gateway  │
+               │  public.*    │  │  (chưa deploy)│
+               │  (RLS+pgvec) │  └──────┬───────┘
+               └──────────────┘         │
+                                 ┌──────▼───────────┐
+                                 │  admin-vectorizer │
+                                 │  Lambda (README   │
+                                 │  only — no code)  │
+                                 └──────────────────┘
 ```
+
+Mọi read/write đi thẳng Supabase qua `useDataService` / `useAuth` (cloud-only). Không có Nitro server proxy; AI backend (API Gateway + Lambda) hiện CHƯA deploy nên nút sinh embedding sẽ báo lỗi cho tới khi cấu hình `NUXT_PUBLIC_API_GATEWAY_URL`.
 
 ## 2. Admin Middleware
 
+`middleware/admin.ts` uses the `useAuth()` composable (not a Pinia auth store).
+
 ```typescript
 // middleware/admin.ts
-export default defineNuxtRouteMiddleware((to, from) => {
-  const authStore = useAuthStore()
+import { useAuth } from '~/composables/useAuth'
 
-  // Not authenticated → redirect to login
-  if (!authStore.isAuthenticated) {
-    return navigateTo('/?redirect=' + to.fullPath)
+export default defineNuxtRouteMiddleware((to) => {
+  const { isAuthenticated, isAdmin } = useAuth()
+
+  if (!isAuthenticated.value) {
+    return navigateTo(`/login?redirect=${encodeURIComponent(to.fullPath)}`)
   }
 
-  // Authenticated but not admin → redirect to dashboard
-  if (!authStore.isAdmin) {
+  if (!isAdmin.value) {
+    // Non-admin users trying to access admin routes → redirect to dashboard
     return navigateTo('/dashboard')
   }
-
-  // Admin → allow
 })
 ```
 
-Applied to admin routes:
+`isAdmin` is derived from `currentUser.role === 'admin'` (read from `public.users.role` at login). It does **not** use `app_metadata.role` or any email allowlist — the old `ADMIN_EMAILS` env override has been removed, so admin status comes **only** from `public.users.role` (mirrored by RLS `is_admin()`).
+
+Applied to every admin route:
 
 ```vue
-<!-- pages/admin/index.vue -->
+<!-- pages/admin/index.vue, users.vue, media.vue -->
 <script setup lang="ts">
-definePageMeta({
-  middleware: ['auth', 'admin'],  // Both global auth + admin check
-  layout: 'default',
-})
+definePageMeta({ middleware: ['auth', 'admin'] })  // global auth + admin guard
 </script>
 ```
 
-### Setting Admin Role in Supabase
+### Making a user an admin
+
+Admins are defined by `public.users.role`. Promote/demote is done from the Users page (see §4), or directly in SQL:
 
 ```sql
 -- Mark a specific user as admin
-UPDATE auth.users
-SET raw_app_meta_data = raw_app_meta_data || '{"role": "admin"}'::jsonb
+UPDATE public.users
+SET role = 'admin'
 WHERE email = '{{ADMIN_EMAIL}}';
 ```
 
+The seeded demo admin (`admin@focusmode.app`) is created with `role='admin'` and `status='approved'` by the migrations. New sign-ups become admin **only** if their email is in the hardcoded list inside the `handle_new_user()` trigger (migration `00008`); everyone else registers as a normal `status='pending'` user. Database-level protection for writes is enforced by RLS using the `is_admin()` function.
+
 ## 3. Routes & Navigation
 
+Implemented pages (a shared tab bar links Overview / Users / Media):
+
 ```
-/admin                → Admin Dashboard (aggregate stats)
-/admin/media          → Media Library list
-/admin/media/add      → Add new media item (form + vectorize)
-/admin/media/[id]     → Edit media item
-/admin/users          → User overview list
-/admin/users/[id]     → Per-user detail & analytics
-```
-
-## 4. Admin Dashboard Page
-
-```vue
-<!-- pages/admin/index.vue -->
-<script setup lang="ts">
-import { useAdminStats } from '~/composables/useAdminStats'
-
-definePageMeta({
-  middleware: ['auth', 'admin'],
-  layout: 'default',
-})
-
-const { stats, isLoading, error, refresh } = useAdminStats()
-</script>
-
-<template>
-  <div class="admin-dashboard">
-    <h1>Admin Dashboard</h1>
-
-    <!-- Stat Cards -->
-    <div class="stats-grid">
-      <StatCard title="Total Users" :value="stats?.totalUsers ?? 0" icon="👥" />
-      <StatCard title="Total Focus Hours" :value="stats?.totalFocusHours ?? 0" icon="⏱️" />
-      <StatCard title="Active Today" :value="stats?.activeToday ?? 0" icon="✅" />
-      <StatCard title="Media Items" :value="stats?.mediaCount ?? 0" icon="📚" />
-    </div>
-
-    <!-- Leaderboard -->
-    <section class="leaderboard">
-      <h2>🏆 Top Focus Users (This Month)</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Rank</th>
-            <th>User</th>
-            <th>Total Hours</th>
-            <th>Streak</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(entry, i) in stats?.leaderboard" :key="entry.userId">
-            <td>{{ i + 1 }}</td>
-            <td>
-              <NuxtLink :to="`/admin/users/${entry.userId}`">
-                {{ entry.displayName ?? entry.userId.slice(0, 8) }}
-              </NuxtLink>
-            </td>
-            <td>{{ (entry.totalSeconds / 3600).toFixed(1) }}h</td>
-            <td>🔥 {{ entry.streakDays }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <!-- Media Library Breakdown -->
-    <section>
-      <h2>Media Library</h2>
-      <div class="media-breakdown">
-        <div v-for="(count, type) in stats?.mediaByType" :key="type">
-          <span>{{ type }}</span>: <strong>{{ count }}</strong>
-        </div>
-      </div>
-    </section>
-  </div>
-</template>
-
-<style scoped>
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-</style>
+/admin                → Admin overview (cards linking to Users / Media + System Health placeholder)
+/admin/users          → User approval + role management + delete
+/admin/media          → Media Library list + Add/Edit dialog + embedding triggers
 ```
 
-### Admin Stats Composable
+> Note: there are **no** `/admin/media/add`, `/admin/media/[id]`, or `/admin/users/[id]` routes. Add/Edit media happens in a modal on `/admin/media`. Per-user detail pages are not implemented.
+
+## 4. Admin Overview Page
+
+`pages/admin/index.vue` is currently a simple navigation hub, not a stats dashboard. It renders the shared tab bar plus three cards:
+
+- **User Management** → links to `/admin/users`
+- **Media Library** → links to `/admin/media`
+- **System Health** → placeholder card (API Gateway / Lambda / Supabase monitor — **not implemented**)
+
+> TODO (backend pending): aggregate stats (total users, total focus hours, active today, leaderboard, media-by-type) are **not** built. There is no `useAdminStats` composable and no `get_total_focus_hours` RPC. Live numeric counters currently exist only on the Users and Media pages.
+
+## 5. User Management Page
+
+`pages/admin/users.vue` (script: `useAuth` + `useDataService`). Approval is driven entirely by the `public.users.status` column (`pending` / `approved` / `rejected`); RLS `is_admin()` gates which rows an admin can read/update.
+
+On sign-up, the DB trigger `handle_new_user()` inserts a `public.users` row with `status='pending'` (whitelisted admin emails are auto-`approved`); the admin then moves users between the three statuses from this page. ⚠️ Supabase **"Confirm email" must be OFF** (Authentication → Providers → Email) — the only gate is admin approval, so with Confirm email on an approved user still hits *"Email not confirmed"* at login.
+
+Features — three status-grouped tables (Pending / Approved / Rejected):
+
+- **Counters:** Approved Users count + Pending Requests count (no counter for rejected).
+- **Pending Approval table** — for each `status='pending'` user: **Approve** (`approveUser` → `UPDATE users SET status='approved'`) or **Reject** (`rejectUser` → `UPDATE users SET status='rejected'`).
+- **Approved Users table** — shows role badge; per row: **Promote/Demote** (`updateUserRole` toggles `role` between `admin`/`user`) and **Delete** (`deleteUser`).
+- **Self-protection:** the current admin cannot delete or promote/demote their own row — actions are hidden and the cell shows "You".
+- **Rejected table** — only rendered when at least one `status='rejected'` user exists (`v-if="rejectedUsers.length"`); per row: **Approve** (`reApprove` → `approveUser`, re-approve to `status='approved'`) or **Set pending** (`setUserStatus(id, 'pending')`). Lets an admin reverse a rejection.
+- **Error hint:** if the load fails, the page suggests checking that migration `00006_user_approval_status.sql` ran and that the admin account actually has `role='admin'` (otherwise RLS blocks reading other users).
+
+Data loading:
 
 ```typescript
-// composables/useAdminStats.ts
-export function useAdminStats() {
-  const stats = ref<AdminStats | null>(null)
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
+const { currentUser, approveUser, rejectUser, getPendingUsers, getRejectedUsers, setUserStatus } = useAuth()
+const { getUsers, updateUserRole, deleteUser } = useDataService()
 
-  async function fetchStats() {
-    isLoading.value = true
-    try {
-      const { $supabase } = useNuxtApp()
-      const supabase = $supabase as SupabaseClient
-
-      // Parallel queries
-      const [
-        { count: totalUsers },
-        { data: hoursData },
-        { data: mediaData },
-        { data: leaderboard },
-      ] = await Promise.all([
-        supabase.from('users').select('*', { count: 'exact', head: true }),
-        supabase.rpc('get_total_focus_hours'),
-        supabase.from('media_library').select('type'),
-        supabase
-          .from('daily_stats')
-          .select('user_id, total_focus_seconds')
-          .gte('date', new Date(Date.now() - 30 * 86400000).toISOString())
-          .order('total_focus_seconds', { ascending: false })
-          .limit(10),
-      ])
-
-      // Count by media type
-      const mediaByType: Record<string, number> = {}
-      for (const item of (mediaData ?? [])) {
-        mediaByType[item.type] = (mediaByType[item.type] ?? 0) + 1
-      }
-
-      stats.value = {
-        totalUsers: totalUsers ?? 0,
-        totalFocusHours: (hoursData as any)?.total_hours ?? 0,
-        mediaCount: (mediaData ?? []).length,
-        activeToday: 0, // TODO: query from daily_stats where date = today
-        mediaByType,
-        leaderboard: (leaderboard ?? []).map((row) => ({
-          userId: row.user_id,
-          totalSeconds: row.total_focus_seconds,
-          streakDays: 0, // TODO: compute streak
-        })),
-      }
-    } catch (e: any) {
-      error.value = e.message
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  return { stats, isLoading, error, refresh: fetchStats }
-}
-
-interface AdminStats {
-  totalUsers: number
-  totalFocusHours: number
-  mediaCount: number
-  activeToday: number
-  mediaByType: Record<string, number>
-  leaderboard: AdminLeaderboardEntry[]
-}
-
-interface AdminLeaderboardEntry {
-  userId: string
-  displayName?: string
-  totalSeconds: number
-  streakDays: number
+async function refresh() {
+  const [pending, approved, rejected] = await Promise.all([getPendingUsers(), getUsers(), getRejectedUsers()])
+  pendingUsers.value = pending.filter(u => u.status === 'pending')
+  approvedUsers.value = approved     // getUsers() returns status='approved' only
+  rejectedUsers.value = rejected     // getRejectedUsers() → status='rejected'
 }
 ```
 
-## 5. Media Library — CRUD Page
+> Removed (do **not** document as current): the legacy `public.user_requests` table, the `approve-user` edge function, and any `public.profiles` table. These were dropped in migration `00007_drop_legacy_approval.sql`. Approval now lives only on `public.users.status`.
 
-```vue
-<!-- pages/admin/media.vue -->
-<script setup lang="ts">
-import { useMediaLibrary } from '~/composables/useMediaLibrary'
+## 6. Media Library Page
 
-definePageMeta({
-  middleware: ['auth', 'admin'],
-  layout: 'default',
-})
+`pages/admin/media.vue` (script: `useDataService`). All CRUD goes straight to `public.media_library` via Supabase.
 
+Features:
+
+- **Counters:** Total Items + Embedded (`embeddedCount / total`).
+- **Table:** Title, Type, Content (URL link or text), Source, Embedded badge (Yes/No), Actions.
+- **Search:** client-side filter over title + source.
+- **Add / Edit dialog** (modal): Title, Type, Content Text *or* Video URL (URL field shown only when `type === 'video'`), Source, comma-separated Tags.
+- **Delete:** hard delete via `deleteMedia` (`DELETE FROM media_library`). There is **no** `is_active` soft-delete / deactivate.
+- **Embedding triggers:** per-row **Embed** button (`generateEmbedding(id)`) shown only when an item has no embedding, plus a **Generate All Embeddings** button (`generateAllEmbeddings()`).
+
+### Media types
+
+The DB `CHECK` on `media_library.type` allows **5 values**: `quote`, `sutra`, `video`, `article`, `audio`. Both the type filter/selectors and the `MediaType` union in `useDataService` mirror this:
+
+```typescript
+export type MediaType = 'quote' | 'sutra' | 'video' | 'article' | 'audio'
+```
+
+## 7. Media CRUD via useDataService
+
+`composables/useDataService.ts` maps snake_case DB rows ↔ app objects. Relevant functions:
+
+```typescript
 const {
-  media,
-  isLoading,
-  typeFilter,
-  searchQuery,
-  fetchMedia,
-  deactivateMedia,
-} = useMediaLibrary()
+  getMedia, createMedia, updateMedia, deleteMedia,
+  generateEmbedding, generateAllEmbeddings,
+} = useDataService()
 
-const showAddForm = ref(false)
-
-onMounted(() => fetchMedia())
-</script>
-
-<template>
-  <div class="media-library">
-    <div class="header">
-      <h1>Media Library</h1>
-      <button @click="showAddForm = true">+ Add New</button>
-    </div>
-
-    <!-- Filters -->
-    <div class="filters">
-      <select v-model="typeFilter" @change="fetchMedia">
-        <option value="">All Types</option>
-        <option value="quote">Quote</option>
-        <option value="sutra">Sutra</option>
-        <option value="video">Video</option>
-        <option value="article">Article</option>
-        <option value="audio">Audio</option>
-      </select>
-      <input
-        v-model="searchQuery"
-        placeholder="Search media..."
-        @input="fetchMedia"
-      />
-    </div>
-
-    <!-- Media List -->
-    <div v-if="isLoading" class="loading">Loading...</div>
-    <div v-else class="media-grid">
-      <MediaCard
-        v-for="item in media"
-        :key="item.id"
-        :item="item"
-        @deactivate="deactivateMedia(item.id)"
-        @edit="navigateTo(`/admin/media/${item.id}`)"
-      />
-    </div>
-
-    <!-- Add Form (modal or inline) -->
-    <MediaAddForm
-      v-if="showAddForm"
-      @close="showAddForm = false"
-      @saved="showAddForm = false; fetchMedia()"
-    />
-  </div>
-</template>
-```
-
-## 6. Add Media — Vectorization Trigger
-
-```vue
-<!-- pages/admin/media/add.vue -->
-<script setup lang="ts">
-definePageMeta({
-  middleware: ['auth', 'admin'],
-})
-
-const title = ref('')
-const contentText = ref('')
-const contentUrl = ref('')
-const type = ref<'quote' | 'sutra' | 'video' | 'article' | 'audio'>('quote')
-const source = ref('')
-const tags = ref<string[]>([])
-
-const isSubmitting = ref(false)
-const submitError = ref<string | null>(null)
-const submitSuccess = ref(false)
-
-async function handleSubmit() {
-  if (!title.value || !contentText.value) return
-
-  isSubmitting.value = true
-  submitError.value = null
-
-  try {
-    // Call Nitro server proxy → API Gateway → Lambda
-    const response = await $fetch('/api/admin/vectorize', {
-      method: 'POST',
-      body: {
-        title: title.value,
-        content_text: contentText.value,
-        content_url: contentUrl.value || undefined,
-        type: type.value,
-        source: source.value || undefined,
-        tags: tags.value,
-      },
-    })
-
-    submitSuccess.value = true
-    setTimeout(() => navigateTo('/admin/media'), 1500)
-  } catch (e: any) {
-    submitError.value = e.data?.message ?? 'Vectorization failed'
-  } finally {
-    isSubmitting.value = false
-  }
+// Read — newest first
+async function getMedia(): Promise<MediaItem[]> {
+  const { data, error } = await getSupabase()
+    .from('media_library').select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`Cannot load media: ${error.message}`)
+  return (data || []).map(rowToMedia)
 }
-</script>
 
-<template>
-  <div class="media-add-page">
-    <h1>Add New Content</h1>
-
-    <form @submit.prevent="handleSubmit">
-      <!-- Type selector -->
-      <div class="field">
-        <label>Type</label>
-        <select v-model="type">
-          <option value="quote">Quote</option>
-          <option value="sutra">Sutra</option>
-          <option value="video">Video</option>
-          <option value="article">Article</option>
-          <option value="audio">Audio</option>
-        </select>
-      </div>
-
-      <!-- Title -->
-      <div class="field">
-        <label>Title *</label>
-        <input v-model="title" required placeholder="e.g., Patience in Adversity" />
-      </div>
-
-      <!-- Content Text -->
-      <div class="field">
-        <label>Content Text *</label>
-        <textarea
-          v-model="contentText"
-          required
-          rows="8"
-          placeholder="Paste full text to be embedded..."
-        />
-      </div>
-
-      <!-- URL (optional) -->
-      <div class="field">
-        <label>Content URL (optional)</label>
-        <input v-model="contentUrl" placeholder="https://youtube.com/watch?v=..." />
-      </div>
-
-      <!-- Source -->
-      <div class="field">
-        <label>Source</label>
-        <input v-model="source" placeholder="e.g., Lamrim Class 2023 — Week 5" />
-      </div>
-
-      <!-- Tags -->
-      <div class="field">
-        <label>Tags</label>
-        <TagInput v-model="tags" />
-      </div>
-
-      <!-- Submit -->
-      <button type="submit" :disabled="isSubmitting">
-        {{ isSubmitting ? 'Vectorizing...' : '🚀 Vectorize & Save' }}
-      </button>
-
-      <p v-if="submitError" class="error">{{ submitError }}</p>
-      <p v-if="submitSuccess" class="success">✅ Content embedded & saved! Redirecting...</p>
-    </form>
-  </div>
-</template>
-```
-
-## 7. Nitro Server Proxy (Hides Lambda URL)
-
-```typescript
-// server/api/admin/vectorize.post.ts
-export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig()
-
-  // Verify admin role (server-side)
-  const authStore = await getSupabaseSession(event)
-  if (!authStore?.user?.app_metadata?.role === 'admin') {
-    throw createError({ statusCode: 403, message: 'Admin role required' })
-  }
-
-  const body = await readBody(event)
-
-  const response = await $fetch(
-    `${config.public.apiGatewayUrl}/admin/vectorize`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': config.apiGatewayKey,
-        'Authorization': `Bearer ${authStore.accessToken}`,
-      },
-      body,
-    }
-  )
-
-  return response
-})
-```
-
-## 8. Media Library Composable
-
-```typescript
-// composables/useMediaLibrary.ts
-export function useMediaLibrary() {
-  const media = ref<MediaItem[]>([])
-  const isLoading = ref(false)
-  const typeFilter = ref('')
-  const searchQuery = ref('')
-
-  async function fetchMedia() {
-    isLoading.value = true
-    try {
-      const { $supabase } = useNuxtApp()
-      const supabase = $supabase as SupabaseClient
-
-      let query = supabase.from('media_library').select('*')
-
-      if (typeFilter.value) {
-        query = query.eq('type', typeFilter.value)
-      }
-      if (searchQuery.value) {
-        query = query.ilike('title', `%${searchQuery.value}%`)
-      }
-
-      const { data } = await query
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      media.value = (data ?? []) as MediaItem[]
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  async function deactivateMedia(id: string) {
-    const { $supabase } = useNuxtApp()
-    const supabase = $supabase as SupabaseClient
-    await supabase.from('media_library').update({ is_active: false }).eq('id', id)
-    await fetchMedia()
-  }
-
+// has_embedding is derived: embedding_vector != null
+function rowToMedia(r: any): MediaItem {
   return {
-    media,
-    isLoading,
-    typeFilter,
-    searchQuery,
-    fetchMedia,
-    deactivateMedia,
+    id: r.id, title: r.title, media_type: r.type,
+    content_text: r.content_text ?? undefined, content_url: r.content_url ?? undefined,
+    source: r.source ?? undefined, tags: r.tags ?? [],
+    has_embedding: r.embedding_vector != null, created_at: r.created_at,
   }
 }
 ```
 
-## 9. Embedding Trigger Flow
+`createMedia` writes `created_by = currentUser.id`; `updateMedia` only patches provided fields. RLS lets all authenticated users `SELECT` media but restricts INSERT/UPDATE/DELETE to admins (`is_admin()`).
 
-```
-Admin submits "Add Content" form
-    │
-    ▼
-Nuxt page → $fetch('/api/admin/vectorize')   (Nitro server proxy)
-    │
-    ▼
-Nitro server validates admin JWT → forwards to API Gateway
-    │
-    ▼
-Lambda: focus-admin-vectorize
-    │
-    ├── Validate admin JWT (app_metadata.role === "admin")
-    ├── Load all-MiniLM-L6-v2 model (cached in global scope)
-    ├── model.encode(content_text) → 384-dim vector
-    └── INSERT INTO media_library (..., embedding_vector)
-    │
-    ▼
-Supabase pgvector index auto-updated
-    │
-    ▼
-Content immediately available in RAG similarity searches
+## 8. Embedding Trigger Flow
+
+The frontend does **not** generate vectors locally and there is **no** Nitro proxy. It calls the AWS backend directly through `useDataService`:
+
+```typescript
+// composables/useDataService.ts
+const { apiGatewayUrl } = useConfig()  // NUXT_PUBLIC_API_GATEWAY_URL
+
+async function generateEmbedding(mediaId: string): Promise<void> {
+  if (!apiGatewayUrl.value)
+    throw new Error('Embedding generation requires the AI backend (API Gateway not configured).')
+  await $fetch(`${apiGatewayUrl.value}/embed`, { method: 'POST', body: { mediaId } })
+}
+
+async function generateAllEmbeddings(): Promise<number> {
+  if (!apiGatewayUrl.value)
+    throw new Error('Embedding generation requires the AI backend (API Gateway not configured).')
+  const res = await $fetch<{ count: number }>(`${apiGatewayUrl.value}/embed-all`, { method: 'POST' })
+  return res?.count ?? 0
+}
 ```
 
-## 10. Deployment
+Intended end-to-end flow once the backend is deployed:
+
+```
+Admin clicks "Embed" / "Generate All Embeddings"
+    │
+    ▼
+useDataService.generateEmbedding(id) / generateAllEmbeddings()
+    │   (requires NUXT_PUBLIC_API_GATEWAY_URL — else throws)
+    ▼
+POST {API_GATEWAY_URL}/embed   |  POST {API_GATEWAY_URL}/embed-all
+    │
+    ▼
+Lambda: admin-vectorizer   ← spec maps to API Gateway POST /admin/vectorize
+    │   ⚠️ STATUS: README only — Lambda NOT implemented yet
+    ├── Load all-MiniLM-L6-v2 (384-dim)
+    ├── model.encode(content_text) → vector
+    └── UPDATE media_library SET embedding_vector = ...
+    │
+    ▼
+Supabase pgvector (VECTOR(384), ivfflat cosine index) updated
+    │
+    ▼
+Content becomes available to RAG similarity search (search_similar_content())
+```
+
+> Backend status: the `admin-vectorizer` Lambda currently has a **README only — no code** (see `aws/README.md`). API Gateway is **not deployed**. Until `NUXT_PUBLIC_API_GATEWAY_URL` is set and the Lambda exists, both embedding buttons surface an error toast. There is no client-side fallback for embeddings.
+
+## 9. Deployment
 
 Admin CMS is part of the main Nuxt app — no separate deploy needed:
 
 ```bash
 # Build (includes admin routes)
-pnpm run build
-
-# Deploy to Cloudflare Pages (via GitLab CI)
-npx wrangler pages deploy dist/ --project-name focus-mode-app
+npm run build
 ```
 
-Access at: `https://focus-mode-app.pages.dev/admin/` (behind admin middleware)
+Access the admin section at `/admin` (behind the `auth` + `admin` middleware).
 
-## 11. Security Considerations
+> The AWS embedding backend (API Gateway + `admin-vectorizer` Lambda) is a separate, **not-yet-deployed** deliverable; there is currently no CI/CD or IaC for it.
+
+## 10. Security Considerations
 
 | Concern                 | Mitigation                                                                              |
 | ----------------------- | --------------------------------------------------------------------------------------- |
-| **Unauthorized access** | `middleware/admin.ts` checks `authStore.isAdmin` on every admin route                   |
-| **API abuse**           | Nitro server validates admin role before proxying to Lambda; API Gateway rate limiting  |
-| **Vectorization cost**  | Admin-only; Lambda Free Tier covers moderate use                                        |
-| **Data exposure**       | RLS policy: admin can INSERT/UPDATE `media_library`; all authenticated users can SELECT |
-| **JWT expiry**          | Auto-refresh via Supabase SDK; Nitro middleware redirects on 401                        |
+| **Unauthorized access** | `middleware/admin.ts` checks `useAuth().isAdmin` (from `users.role`) on every admin route |
+| **Database writes**     | Supabase RLS `is_admin()` gates INSERT/UPDATE/DELETE on `users` and `media_library`     |
+| **Self-lockout**        | Users page hides delete/role actions on the current admin's own row                      |
+| **Vectorization cost**  | Admin-only trigger; backend (API Gateway + Lambda) gated separately — not yet deployed   |
+| **Data exposure**       | RLS: admins manage `media_library`; all authenticated users can `SELECT` it             |
+| **JWT expiry**          | Auto-refresh via Supabase SDK; failed loads surface an inline error with a fix hint     |

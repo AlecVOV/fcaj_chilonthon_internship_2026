@@ -1,12 +1,40 @@
 # Lambda Function Contracts — Detailed Request/Response
 
+> Cập nhật 2026-06-29 — đồng bộ với bản cài đặt hiện tại (trạng thái implement đã ghi rõ).
+
 > **Project:** Focus Mode App  
 > **Architecture:** Event-Driven Serverless on AWS Free Tier  
 > **Authentication:** Supabase JWT (Bearer token) validated at API Gateway  
+> **Tài liệu này là SPEC.** Backend hiện chạy **cloud-only trên Supabase** (Postgres + Auth + pgvector); mọi read/write của frontend đi thẳng Supabase. Lớp AWS (API Gateway + Lambda + Bedrock) **CHƯA deploy**; các Lambda dưới đây chỉ có code ở 2 hàm agent (xem bảng dưới), còn lại mới chỉ có README.
+
+## Trạng thái implement (2026-06-29)
+
+| Lambda | Trạng thái | Ghi chú |
+|---|---|---|
+| `agent-bff` | **CÓ code** (`aws/lambdas/agent-bff/lambda_function.py`, có `deploy.sh`) | BFF gọi Bedrock InvokeAgent. CHƯA mô tả contract chi tiết trong file này — xem README của hàm. |
+| `agent-action-handler` | **CÓ code** (`aws/lambdas/agent-action-handler/lambda_function.py`, có `deploy.sh`) | Action Group của Bedrock Agent: create/update/delete task trong Supabase. |
+| `emotion-detector` | **MỚI README** (chưa có `lambda_function.py`) | Mục 1 dưới đây là spec. |
+| `report-generator` | **MỚI README** (chưa có `lambda_function.py`) | Mục 2 dưới đây là spec. |
+| `rag-recommender` | **MỚI README** (chưa có `lambda_function.py`) | Mục 3 dưới đây là spec. |
+| `admin-vectorizer` | **MỚI README** (chưa có `lambda_function.py`) | Mục 5 dưới đây là spec. |
+| Agentic Suggestions (`focus-ai-suggestions`) | **Chỉ spec** (chưa có thư mục/code) | Mục 4 dưới đây là spec đề xuất. |
+| Layers (`onnx-transformers`, `sentence-transformers`) | **Chỉ spec** | `aws/layers/` mới có README. |
+| API Gateway (`aws/api-gateway/openapi.yaml`) + Bedrock action group (`aws/bedrock/action-group-openapi.yaml`) | **Có spec, CHƯA deploy** | Frontend chỉ gọi khi có `NUXT_PUBLIC_API_GATEWAY_URL`; nếu thiếu thì dùng fallback (xem mục Frontend fallback). |
+
+> **Lưu ý route:** OpenAPI spec dùng `/emotion/detect`, `/report`, `/rag/recommend`, `/admin/vectorize`, `/agent/chat`. Frontend hiện gọi các route rút gọn `/emotion`, `/report`, `/rag`, `/agent/chat`. Khi deploy thật cần thống nhất route giữa hai bên.
+
+## Frontend fallback (khi chưa có API Gateway URL)
+
+- **Emotion** (`web/composables/useEmotionDetector.ts`): có URL → `POST {API}/emotion`; thiếu URL → phân loại bằng **regex client-side** (nhãn: focused/stressed/exhausted/relaxed).
+- **RAG** (`web/composables/useRAG.ts`): có URL → `POST {API}/rag`; thiếu URL/ lỗi → trả **2 item hardcode** (On Patience – sutra; 5‑Minute Breathing – video).
+- **Report** (`web/composables/useReportExport.ts`): có URL → `POST {API}/report`; thiếu URL/ lỗi → **render Markdown và tải `.md` ở client** (không còn pipeline LaTeX/Tectonic).
+- **Agent chat** (`web/composables/useAgentChat.ts`): **bắt buộc** API Gateway URL; thiếu URL → **báo lỗi** "AI agent backend is not configured" (không có mock).
 
 ---
 
 ## 1. Emotion Detection Lambda (`focus-emotion-detector`)
+
+> **Status:** MỚI README (chưa có `lambda_function.py`). Spec dưới đây. Frontend hiện fallback regex client-side khi thiếu API Gateway URL. Nhãn cảm xúc chuẩn: `focused`, `stressed`, `exhausted`, `relaxed`, `unmotivated`.
 
 | Property | Value |
 |---|---|
@@ -66,6 +94,8 @@ Content-Type: application/json
 ---
 
 ## 2. Report Generator Lambda (`focus-report-generator`)
+
+> **Status:** MỚI README (chưa có `lambda_function.py`). Spec dưới đây. **Frontend đã chuyển sang Markdown** (`web/composables/useReportExport.ts`): khi thiếu API Gateway URL thì render Markdown rồi tải `.md` ở client; route gọi là `POST {API}/report` với body `{ md_content, user_id, date }` (không còn pipeline LaTeX/Tectonic). Phần spec LaTeX/Tectonic/SES dưới đây là phương án backend dự kiến, CHƯA implement.
 
 | Property | Value |
 |---|---|
@@ -156,6 +186,8 @@ When triggered by EventBridge, the Lambda queries **all users** who had focus se
 
 ## 3. RAG Recommender Lambda (`focus-rag-recommender`)
 
+> **Status:** MỚI README (chưa có `lambda_function.py`). Spec dưới đây. Frontend (`web/composables/useRAG.ts`) gọi `POST {API}/rag` khi có URL, ngược lại trả 2 item hardcode. Truy vấn pgvector dùng hàm `public.search_similar_content()` (đã có trong migration `00001`); embedding `all-MiniLM-L6-v2` = **384 chiều**; `media_type` hợp lệ = quote/sutra/video/article/audio.
+
 | Property | Value |
 |---|---|
 | **Runtime** | Python 3.12 |
@@ -181,17 +213,19 @@ Authorization: Bearer <supabase_jwt>
 
 1. Query `focus_sessions` for `session_id` → get `journal_text`, `emotion_label`.
 2. If `journal_text` exists, generate its embedding via `all-MiniLM-L6-v2` (384-dim).
-3. Query `media_library` using pgvector cosine similarity:
+3. Query `media_library` qua hàm `public.search_similar_content()` (đã có sẵn trong migration `00001`), thay vì SQL inline:
 
 ```sql
-SELECT id, title, content_text, content_url, type, source,
-       1 - (embedding_vector <=> query_embedding) AS similarity
-FROM media_library
-WHERE is_active = TRUE
-  AND embedding_vector IS NOT NULL
-  AND (types IS NULL OR type = ANY(types))
-ORDER BY embedding_vector <=> query_embedding
-LIMIT {limit};
+-- search_similar_content(query_embedding VECTOR(384), match_threshold REAL DEFAULT 0.3,
+--                         match_count INTEGER DEFAULT 5, filter_type TEXT DEFAULT NULL)
+SELECT * FROM public.search_similar_content(
+    query_embedding => :embedding,   -- VECTOR(384)
+    match_threshold => 0.3,
+    match_count     => :limit,
+    filter_type     => :type          -- một trong: quote|sutra|video|article|audio, hoặc NULL
+);
+-- Hàm đã lọc is_active = TRUE, embedding_vector IS NOT NULL và ngưỡng similarity,
+-- trả về: id, title, content_text, content_url, type, source, similarity.
 ```
 
 4. Return ranked results.
@@ -228,6 +262,8 @@ LIMIT {limit};
 ---
 
 ## 4. Agentic Suggestions Lambda (`focus-ai-suggestions`)
+
+> **Status:** Chỉ spec — CHƯA có thư mục/code trong `aws/lambdas/`. Hiện gợi ý "AI Suggestions" trong report là chuỗi tĩnh ở client (`web/composables/useReportExport.ts`).
 
 | Property | Value |
 |---|---|
@@ -280,7 +316,9 @@ Authorization: Bearer <supabase_jwt>
 
 ---
 
-## 5. Admin Vectorization Lambda (`focus-admin-vectorize`)
+## 5. Admin Vectorization Lambda (`focus-admin-vectorize` / thư mục `admin-vectorizer`)
+
+> **Status:** MỚI README (chưa có `lambda_function.py`). Spec dưới đây. Khi implement: sinh embedding `all-MiniLM-L6-v2` 384 chiều rồi INSERT vào `public.media_library` (`type` ∈ quote/sutra/video/article/audio, cột `embedding_vector VECTOR(384)`).
 
 | Property | Value |
 |---|---|
@@ -332,6 +370,68 @@ Authorization: Bearer <supabase_jwt>     // Must be admin role
   "statusCode": 403
 }
 ```
+
+---
+
+## 6. Agent BFF Lambda (`agent-bff`) — IMPLEMENTED
+
+> **Status:** CÓ code (`aws/lambdas/agent-bff/lambda_function.py`, handler `handler`, có `deploy.sh`). Đây là hàm duy nhất phục vụ Agent chat ở phía frontend.
+
+| Property | Value |
+|---|---|
+| **Runtime** | Python 3.12 |
+| **Trigger** | API Gateway `POST /agent/chat` |
+| **Package** | `boto3` |
+| **Env** | `BEDROCK_AGENT_ID`, `BEDROCK_AGENT_ALIAS_ID`, `AWS_REGION` |
+
+### Request
+
+```json
+POST /agent/chat
+Authorization: Bearer <supabase_jwt>
+
+{
+  "sessionId": "session-<userId>-<ts>",
+  "inputText": "Add a task to finish the thesis tomorrow"
+}
+```
+`userId` lấy từ JWT claim `sub` (`requestContext.authorizer.claims.sub`).
+
+### Processing
+
+1. Gọi `bedrock-agent-runtime.invoke_agent(agentId, agentAliasId, sessionId, inputText, sessionState={sessionAttributes:{userId}})`.
+2. Stream và gộp các `chunk` của `completion`.
+
+### Response (200 OK)
+
+```json
+{ "sessionId": "session-...", "responseText": "Task created: Finish the thesis" }
+```
+
+> Frontend (`web/composables/useAgentChat.ts`) **bắt buộc** `NUXT_PUBLIC_API_GATEWAY_URL`; thiếu URL → báo lỗi, không có mock.
+
+---
+
+## 7. Agent Action Handler Lambda (`agent-action-handler`) — IMPLEMENTED
+
+> **Status:** CÓ code (`aws/lambdas/agent-action-handler/lambda_function.py`, handler `handler`, có `deploy.sh`). Là Action Group của Bedrock Agent, ghi thẳng Supabase. Contract đầu vào theo `aws/bedrock/action-group-openapi.yaml`.
+
+| Property | Value |
+|---|---|
+| **Runtime** | Python 3.12 |
+| **Trigger** | Bedrock Agent Action Group (`todo-manager-api`) |
+| **Package** | `supabase` |
+| **Env** | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+
+### Actions
+
+| apiPath | method | Hành vi |
+|---|---|---|
+| `/create-task` | POST | INSERT `tasks` (`status='pending'`, `priority` mặc định 0, `due_date` tùy chọn). |
+| `/update-task` | PUT | UPDATE `tasks` theo `taskId` (chỉ row thuộc `user_id`); 404 nếu không thấy/không sở hữu. |
+| `/delete-task` | DELETE | DELETE `tasks` theo `taskId` thuộc `user_id`. |
+
+`userId` lấy từ `sessionAttributes.userId` do `agent-bff` truyền vào. Mọi thao tác ghi vào bảng `public.tasks` của Supabase (cloud-only).
 
 ---
 

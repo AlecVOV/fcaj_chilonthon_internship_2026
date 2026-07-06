@@ -1,0 +1,24 @@
+# AWS Amplify Hosting build spec.
+# App sống trong subfolder web/ (monorepo). Build static SPA bằng `nuxt generate`
+# → output ở web/.output/public. App là Nuxt 3 (package.json: nuxt ^3.15), SPA
+# (routeRules ssr:false) nên host tĩnh, KHÔNG dùng Amplify compute/SSR.
+version: 1
+applications:
+  - appRoot: web
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run generate
+      artifacts:
+        # baseDirectory tương đối theo appRoot (web/) → web/.output/public
+        baseDirectory: .output/public
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - .nuxt/**/*

@@ -1,9 +1,9 @@
 <template>
   <div class="card flex flex-col h-[calc(100vh-14rem)]">
     <!-- Header -->
-    <div class="pb-3 border-b border-neutral-200 dark:border-dark-border">
-      <h2 class="text-sm font-semibold text-neutral-950 dark:text-dark-text">Task Assistant</h2>
-      <p class="mt-0.5 text-xs text-neutral-950/40 dark:text-white/25">
+    <div class="pb-3 border-b border-hairline dark:border-hairline-dark">
+      <h2 class="font-display text-lg text-ink dark:text-on-dark">Task Assistant</h2>
+      <p class="mt-0.5 text-sm text-ink-muted dark:text-on-dark-soft">
         Describe what you need to do — I'll create tasks or ask clarifying questions.
       </p>
     </div>
@@ -12,13 +12,13 @@
     <div ref="chatContainer" class="flex-1 overflow-y-auto py-3 space-y-3 min-h-0">
       <!-- Empty State -->
       <div v-if="messages.length === 0" class="py-8 text-center">
-        <p class="text-sm text-neutral-950/25 dark:text-white/15 mb-4">Start by telling me what you need to work on.</p>
+        <p class="text-sm text-ink-soft dark:text-on-dark-soft/70 mb-4">Start by telling me what you need to work on.</p>
         <div class="flex flex-wrap gap-2 justify-center">
           <button
             v-for="example in examplePrompts"
             :key="example"
             @click="sendMessage(example)"
-            class="rounded border border-neutral-200 dark:border-dark-border px-3 py-1.5 text-xs text-neutral-950/50 dark:text-white/30 hover:bg-neutral-150 dark:hover:bg-dark-surface transition-colors"
+            class="rounded-md border border-hairline dark:border-hairline-dark px-3 py-1.5 text-sm text-ink-muted dark:text-on-dark-soft hover:bg-canvas-card dark:hover:bg-surface-dark-soft transition-colors"
           >
             {{ example }}
           </button>
@@ -33,10 +33,10 @@
         :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
       >
         <div
-          class="max-w-[80%] rounded px-3 py-2 text-sm"
+          class="max-w-[80%] rounded-lg px-4 py-2.5 text-sm"
           :class="msg.role === 'user'
-            ? 'bg-interactive-blue text-white'
-            : 'bg-neutral-150 dark:bg-dark-surface text-neutral-950 dark:text-dark-text'"
+            ? 'bg-primary text-white'
+            : 'bg-canvas-card dark:bg-surface-dark-soft text-ink dark:text-on-dark'"
         >
           <p class="whitespace-pre-wrap">{{ msg.text }}</p>
 
@@ -45,10 +45,10 @@
             <div
               v-for="task in msg.tasks"
               :key="task.id"
-              class="rounded border border-neutral-200 dark:border-dark-border bg-white dark:bg-dark-card px-2 py-1.5 text-xs"
+              class="rounded-md border border-hairline dark:border-hairline-dark bg-canvas dark:bg-surface-dark-elevated px-2.5 py-2 text-sm"
             >
-              <p class="font-medium text-neutral-950 dark:text-dark-text">{{ task.title }}</p>
-              <p class="mt-0.5 text-neutral-950/30 dark:text-white/20">Status: {{ task.status }}</p>
+              <p class="font-medium text-ink dark:text-on-dark">{{ task.title }}</p>
+              <p class="mt-0.5 text-ink-soft dark:text-on-dark-soft">Status: {{ task.status }}</p>
             </div>
           </div>
 
@@ -60,23 +60,23 @@
 
       <!-- Loading indicator -->
       <div v-if="isLoading" class="flex justify-start">
-        <div class="bg-neutral-150 dark:bg-dark-surface rounded px-3 py-2 text-sm text-neutral-950/40 dark:text-white/25">
+        <div class="bg-canvas-card dark:bg-surface-dark-soft rounded-lg px-4 py-2.5 text-sm text-ink-muted dark:text-on-dark-soft">
           Thinking...
         </div>
       </div>
 
       <!-- Error -->
-      <div v-if="error" class="text-center text-xs text-critical dark:text-critical-dark">
+      <div v-if="error" class="text-center text-sm text-error dark:text-error">
         {{ error }}
       </div>
     </div>
 
     <!-- Input -->
-    <div class="pt-3 border-t border-neutral-200 dark:border-dark-border flex gap-2">
+    <div class="pt-3 border-t border-hairline dark:border-hairline-dark flex gap-2">
       <input
         ref="inputEl"
         v-model="inputText"
-        class="input flex-1 text-sm"
+        class="input flex-1"
         placeholder="E.g., I need to write an internship report about cloud architecture..."
         @keyup.enter="handleSend"
         :disabled="isLoading"

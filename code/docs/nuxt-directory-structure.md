@@ -1,155 +1,103 @@
 # Nuxt 4 — Recommended Directory Structure
 
+> Cập nhật 2026-07-06 — đồng bộ với bản cài đặt cloud-only hiện tại.
+
 > **Project:** Focus Mode App (Web-Only)  
 > **Framework:** Nuxt 4 (Vue 3, Nitro server, auto-imports)  
-> **Deploy:** Cloudflare Pages (static + serverless functions)
+> **Backend:** Cloud-only trên Supabase (Postgres + Auth + pgvector)
 
 ---
 
 ## 1. Full Directory Layout
 
 ```
-focus-mode-web/
+web/
 ├── .env                          # Environment variables (NUXT_PUBLIC_*)
-├── .env.example                  # Template for .env (see environment.example)
-├── .gitignore
+├── .env.example                  # Template for .env
 ├── nuxt.config.ts                # Nuxt configuration
-├── package.json
+├── tailwind.config.ts            # Tailwind CSS configuration
 ├── tsconfig.json
-├── vitest.config.ts
-├── playwright.config.ts
+├── package.json
+├── package-lock.json
+│
+├── app.vue                       # Root app component
+├── error.vue                     # Global error page
 │
 ├── pages/                        # File-based routing (Nuxt 4)
-│   ├── index.vue                 # Landing / Login page
+│   ├── index.vue                 # Landing page (cloud-only, có "Cloud Sync")
+│   ├── login.vue                 # Login (3 tab: Sign In / Request Access / Forgot)
 │   ├── dashboard.vue             # Main user dashboard (requires auth)
-│   ├── focus.vue                 # Focus mode (Pomodoro timer)
 │   ├── tasks.vue                 # To-do list management
-│   ├── reports.vue               # View past daily reports
-│   ├── insights.vue              # AI suggestions & emotion trends
-│   ├── settings.vue              # User settings
+│   ├── focus.vue                 # Focus mode (Pomodoro timer)
+│   ├── agent.vue                 # AI agent chat
+│   ├── calendar.vue              # History heatmap (lịch sử focus)
+│   ├── profile.vue               # User profile / settings
+│   ├── author.vue                # About the author
 │   │
 │   └── admin/                    # Admin CMS (role-gated)
 │       ├── index.vue             # Admin dashboard (aggregate stats)
-│       ├── media.vue             # Media library management
-│       ├── media/[id].vue        # Edit media item
-│       └── users.vue             # User overview
+│       ├── users.vue             # User overview + approve/reject
+│       └── media.vue             # Media library management
 │
 ├── layouts/                      # Shared layouts
-│   ├── default.vue               # Main layout (sidebar + header)
-│   └── focus.vue                 # Fullscreen dark layout for focus mode
+│   ├── default.vue               # Main layout (sidebar + header, app pages)
+│   └── landing.vue               # Layout cho trang landing/marketing
 │
-├── components/                   # Auto-imported Vue components
-│   ├── auth/
-│   │   └── LoginForm.vue
-│   ├── task/
-│   │   ├── TaskCard.vue
-│   │   ├── TaskList.vue
-│   │   └── TaskForm.vue
-│   ├── focus/
-│   │   ├── FocusTimer.vue
-│   │   ├── FocusControls.vue
-│   │   ├── AmbientPlayer.vue
-│   │   └── JournalForm.vue
-│   ├── dashboard/
-│   │   ├── StatsCard.vue
-│   │   ├── EmotionChart.vue
-│   │   ├── FocusHeatmap.vue
-│   │   └── StreakCounter.vue
-│   ├── rag/
-│   │   └── RecommendationCard.vue
-│   └── ui/
-│       ├── AppHeader.vue
-│       ├── AppSidebar.vue
-│       ├── SyncStatusBadge.vue
-│       └── LoadingSpinner.vue
+├── components/                   # Auto-imported Vue components (flat)
+│   ├── AgentChat.vue             # Khung chat với AI agent
+│   ├── AmbientPlayer.vue         # Trình phát nhạc nền cho focus
+│   ├── ColorModeToggle.vue       # Chuyển light/dark mode
+│   ├── EmotionBadge.vue          # Hiển thị nhãn cảm xúc
+│   ├── ExportReportButton.vue    # Nút xuất báo cáo
+│   ├── FocusTimer.vue            # Đồng hồ đếm ngược Pomodoro
+│   ├── SyncStatus.vue            # Chỉ báo Online/Offline (connectivity only)
+│   ├── TaskList.vue              # Danh sách task theo section
+│   └── TaskReviewDialog.vue      # Hộp review "How was this task?" (dùng chung)
 │
 ├── composables/                  # Auto-imported composables (Vue 3 hooks)
-│   ├── useAuth.ts                # Supabase auth wrapper
-│   ├── useDB.ts                  # Dexie instance accessor
-│   ├── useSupabase.ts            # Supabase client composable
-│   ├── useSyncQueue.ts           # Sync queue manager
-│   ├── useEmotionDetector.ts     # Call NLP Lambda
-│   ├── useRAG.ts                 # RAG recommendation queries
-│   ├── useReport.ts              # Report generation triggers
-│   └── useAmbientPlayer.ts       # Audio streaming from S3
+│   ├── useAuth.ts                # Supabase Auth wrapper + approve/reject user
+│   ├── useDataService.ts         # Truy cập dữ liệu Supabase (map snake_case↔camelCase)
+│   ├── useConfig.ts              # Đọc runtime config (Supabase URL, API Gateway URL...)
+│   ├── useAgentChat.ts           # Gọi AI agent (POST {API}/agent/chat)
+│   ├── useEmotionDetector.ts     # Nhận diện cảm xúc (API hoặc fallback regex)
+│   ├── useRAG.ts                 # Gợi ý nội dung (RAG; API hoặc fallback)
+│   ├── useReportExport.ts        # Xuất báo cáo (API hoặc tải .md ở client)
+│   ├── useAmbientSound.ts        # Sinh nhạc nền procedural bằng WebAudio (rain/cafe/waves)
+│   ├── useOffline.ts             # CHỈ báo kết nối (navigator.onLine), KHÔNG queue/sync
+│   └── useScrollZoom.ts          # Hiệu ứng zoom theo scroll
 │
 ├── stores/                       # Pinia stores
-│   ├── auth.store.ts             # Auth state (user, session, role)
-│   ├── tasks.store.ts            # Task CRUD + sync
+│   ├── task.store.ts             # Task CRUD + luồng review (cloud Supabase trực tiếp)
 │   ├── focus.store.ts            # Pomodoro timer state
-│   ├── dashboard.store.ts        # Aggregated stats
-│   ├── media.store.ts            # Media library (admin)
-│   └── sync.store.ts             # Sync status (pending count, last sync)
+│   └── user.store.ts             # User state (profile, role, status)
 │
-├── server/                       # Nitro server (API proxies + SSR)
-│   ├── api/                      # Server API routes (optional proxy layer)
-│   │   ├── emotion.post.ts       # Proxy to Emotion Lambda
-│   │   ├── reports.post.ts       # Proxy to Report Lambda
-│   │   ├── rag.post.ts           # Proxy to RAG Lambda
-│   │   └── admin/
-│   │       └── vectorize.post.ts # Proxy to Admin Vectorize Lambda
-│   │
-│   ├── middleware/
-│   │   └── auth.ts               # Server-side auth guard
-│   └── utils/
-│       └── supabase.ts           # Server-side Supabase client (service_role)
-│
-├── services/                     # Plain TypeScript service layer
-│   ├── supabase.service.ts       # Supabase client init + helpers
-│   ├── api.service.ts            # HTTP client to Lambda endpoints
-│   ├── sync.service.ts           # Sync queue push/pull logic
-│   └── notification.service.ts   # Browser notification (Web Push / toast)
-│
-├── utils/                        # Pure utility functions
-│   ├── uuid.ts                   # UUID v4 generator
-│   ├── datetime.ts               # Date formatting helpers
-│   ├── timer.ts                  # Timer calculations
-│   └── debounce.ts               # Debounce/throttle helpers
+├── lib/                          # Thư viện client dùng chung
+│   └── supabaseClient.ts         # Khởi tạo Supabase client (singleton)
 │
 ├── middleware/                   # Nuxt route middleware (client-side guards)
-│   ├── auth.global.ts            # Global auth check
-│   └── admin.ts                  # Admin role guard
-│
-├── plugins/                      # Nuxt plugins
-│   ├── supabase.client.ts        # Provide Supabase client
-│   ├── dexie.client.ts           # Provide Dexie DB instance
-│   └── pwa.ts                    # PWA / service worker registration
-│
-├── public/                       # Static assets
-│   ├── favicon.ico
-│   ├── audio/                    # Default ambient tracks (bundled)
-│   │   └── minecraft-default.mp3
-│   └── robots.txt
+│   ├── auth.ts                   # Yêu cầu đăng nhập
+│   └── admin.ts                  # Yêu cầu quyền admin
 │
 ├── assets/                       # Build-processed assets
 │   └── css/
-│       └── main.css              # Global styles (Tailwind or custom)
+│       └── main.css              # Global styles (Tailwind)
 │
-└── tests/                        # Vitest + Playwright tests
-    ├── unit/
-    │   ├── stores/
-    │   │   ├── tasks.store.test.ts
-    │   │   ├── focus.store.test.ts
-    │   │   └── sync.store.test.ts
-    │   ├── services/
-    │   │   └── sync.service.test.ts
-    │   ├── composables/
-    │   │   └── useEmotionDetector.test.ts
-    │   └── database/
-    │       └── indexeddb.test.ts
-    └── e2e/                      # Playwright (optional for MVP)
-        └── focus-flow.spec.ts
+└── public/                       # Static assets
+    └── favicon.svg
 ```
+
+> **Lưu ý:** KHÔNG còn store `auth.store` / `dashboard.store` / `media.store` / `sync.store`.
+> Auth là composable `useAuth.ts` + Supabase Auth + `user.store.ts`; dashboard tính stats
+> inline trong `dashboard.vue`; admin/media dùng `useDataService`.
 
 ## 2. File Naming Conventions
 
 | Convention | Example |
 |---|---|
-| **PascalCase** for components | `TaskCard.vue`, `FocusTimer.vue` |
-| **camelCase** for composables | `useAuth.ts`, `useSyncQueue.ts` |
-| **dot notation** for stores | `tasks.store.ts`, `auth.store.ts` |
-| **kebab-case** for pages | `settings.vue`, `media/[id].vue` |
-| **dot notation** for services | `supabase.service.ts` |
+| **PascalCase** for components | `TaskList.vue`, `FocusTimer.vue` |
+| **camelCase** for composables | `useAuth.ts`, `useDataService.ts` |
+| **dot notation** for stores | `task.store.ts`, `focus.store.ts` |
+| **kebab-case / lowercase** for pages | `dashboard.vue`, `admin/users.vue` |
 
 ## 3. `nuxt.config.ts` Reference
 
@@ -160,78 +108,81 @@ export default defineNuxtConfig({
 
   modules: [
     '@pinia/nuxt',           // Pinia state management
-    '@vite-pwa/nuxt',        // PWA (optional)
-    '@nuxtjs/tailwindcss',   // Styling (optional)
+    '@nuxtjs/tailwindcss',   // Styling
   ],
 
-  runtimeConfig: {
-    // Server-only (not exposed to client)
-    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    apiGatewayKey: process.env.API_GATEWAY_KEY,
-    awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  css: ['~/assets/css/main.css'],
 
+  runtimeConfig: {
     // Public (exposed to client via NUXT_PUBLIC_*)
     public: {
-      supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL,
-      supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY,
-      apiGatewayUrl: process.env.NUXT_PUBLIC_API_GATEWAY_URL,
-      appUrl: process.env.NUXT_PUBLIC_APP_URL,
+      supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321',
+      supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      apiGatewayUrl: process.env.NUXT_PUBLIC_API_GATEWAY_URL || '',
+      appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
     },
   },
 
-  nitro: {
-    preset: 'cloudflare-pages',
-    // Optional: route rules for cache
-    routeRules: {
-      '/admin/**': { ssr: false },     // Admin is SPA
-      '/dashboard/**': { ssr: false }, // Dashboard requires auth
-    },
+  pinia: {
+    storesDirs: ['./stores'],
+  },
+
+  // Các route tương tác chạy ở chế độ SPA (ssr: false)
+  routeRules: {
+    '/': { ssr: false },
+    '/dashboard': { ssr: false },
+    '/focus': { ssr: false },
+    '/tasks': { ssr: false },
+    '/calendar': { ssr: false },
+    '/agent': { ssr: false },
+    '/profile': { ssr: false },
+    '/author': { ssr: false },
+    '/admin': { ssr: false },
+    '/admin/**': { ssr: false },
   },
 
   // Auto-import dirs
   imports: {
-    dirs: ['stores', 'composables', 'services', 'utils'],
+    dirs: ['composables'],
   },
-});
+
+  compatibilityDate: '2025-05-22',
+})
 ```
 
 ## 4. Key Architectural Decisions
 
 | Area | Decision | Rationale |
 |---|---|---|
-| **Rendering mode** | SPA with SSR for landing page | Dashboard/focus are interactive; SSR not needed |
-| **Server API** | `server/api/` proxies Lambda | Hides Lambda URLs from client; adds server-side validation |
-| **Auth** | Supabase Auth + Pinia store | Pinia holds `user` reactive state; middleware guards routes |
-| **Offline** | Dexie.js + Sync Queue | IndexedDB for structured data; sync queue for push |
-| **State** | Pinia (not Vuex) | Official Vue 3 store; TypeScript-first; devtools support |
-| **Data fetching** | `$fetch` / `useFetch` in composables | Native Nuxt utilities; no extra dependency |
-| **Notifications** | Web Notifications API | Simple browser alerts for health breaks; no Firebase/FCM |
-| **Styling** | Tailwind CSS v4 | Utility-first; fast to build immersive dark UI |
+| **Rendering mode** | SPA (`ssr: false`) cho các route tương tác | Dashboard/focus/tasks cần phản hồi tức thời phía client |
+| **Data layer** | **Cloud-only trên Supabase** | Mọi read/write đi thẳng Supabase (Postgres + Auth + pgvector); KHÔNG offline/IndexedDB |
+| **Truy cập dữ liệu** | `useDataService.ts` + `lib/supabaseClient.ts` | Một client Supabase dùng chung; composable map snake_case↔camelCase |
+| **Auth** | Supabase Auth + composable + Pinia | `useAuth.ts` bao Supabase Auth; `user.store.ts` giữ state; middleware `auth`/`admin` chặn route |
+| **State** | Pinia (not Vuex) | Store chính thức của Vue 3; TypeScript-first; hỗ trợ devtools |
+| **AI features** | Gọi AWS Lambda + API Gateway + Bedrock | `useAgentChat`/`useEmotionDetector`/`useRAG`/`useReportExport` gọi API khi có `NUXT_PUBLIC_API_GATEWAY_URL`; một số có fallback client-side |
+| **Connectivity** | `useOffline.ts` + `SyncStatus.vue` | CHỈ là chỉ báo Online/Offline (`navigator.onLine`); KHÔNG có sync queue |
+| **Notifications** | Web Notifications API | Thông báo trình duyệt khi hết giờ focus; không Firebase/FCM |
+| **Styling** | Tailwind CSS v4 | Utility-first; dựng nhanh UI tối, đắm chìm |
 
-## 5. Plugins Initialization Order
+## 5. Tầng dữ liệu cloud-only
+
+- Toàn bộ dữ liệu (users, tasks, focus_sessions, daily_worklogs, daily_stats, media_library...)
+  nằm trên **Supabase Postgres**; client đọc/ghi trực tiếp qua `lib/supabaseClient.ts`.
+- Bảo mật bằng **Row Level Security (RLS)**; quyền admin xác định qua hàm `is_admin()`.
+- Tìm kiếm ngữ nghĩa (RAG) dùng **pgvector** với `search_similar_content()` (embedding 384 chiều).
+- KHÔNG có IndexedDB / Dexie / sync queue / Last-Write-Wins / mock backend — các thành phần
+  này đã bị gỡ khỏi codebase (ví dụ `web/lib/db.ts`, `web/composables/useSyncQueue.ts`).
 
 ```typescript
-// plugins/supabase.client.ts
-export default defineNuxtPlugin(() => {
-  const config = useRuntimeConfig()
-  const supabase = createClient(
-    config.public.supabaseUrl,
-    config.public.supabaseAnonKey,
-    {
-      auth: {
-        storage: localStorage,     // Persist session in browser
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-      },
-    }
-  )
-  return { provide: { supabase } }
-})
+// lib/supabaseClient.ts (ý tưởng)
+import { createClient } from '@supabase/supabase-js'
 
-// plugins/dexie.client.ts
-export default defineNuxtPlugin(() => {
-  const db = getDB()  // Singleton from indexeddb_schema.ts
-  return { provide: { db } }
+// Một client dùng chung cho toàn app, đọc URL/anon key từ runtimeConfig.public
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
 })
 ```

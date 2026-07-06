@@ -1,18 +1,23 @@
 // lib/supabaseClient.ts
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 let supabase: ReturnType<typeof createClient> | null = null
 
-export function getSupabase() {
+export function getSupabase(): SupabaseClient {
   if (supabase) return supabase
+
   const config = useRuntimeConfig()
   const url = (config.public.supabaseUrl as string) || 'http://localhost:54321'
   const key = (config.public.supabaseAnonKey as string) || 'mock-key'
+
   supabase = createClient(url, key, {
     auth: {
       storage: typeof window !== 'undefined' ? localStorage : undefined,
-      autoRefreshToken: true, persistSession: true, detectSessionInUrl: true,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
     },
   })
+
   return supabase
 }

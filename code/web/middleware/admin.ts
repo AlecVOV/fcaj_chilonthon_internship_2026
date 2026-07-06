@@ -17,6 +17,6 @@ export default defineNuxtRouteMiddleware((to) => {
 
   if (!isAdmin.value) {
     // Non-admin users trying to access admin routes → redirect to dashboard
-    return navigateTo('/')
+    return navigateTo('/dashboard')
   }
 })

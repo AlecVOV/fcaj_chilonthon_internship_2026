@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email           TEXT NOT NULL UNIQUE,
     display_name    TEXT,
+    role            TEXT NOT NULL DEFAULT 'user'
+                    CHECK (role IN ('user', 'admin')),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

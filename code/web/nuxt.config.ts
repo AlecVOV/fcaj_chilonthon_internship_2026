@@ -15,9 +15,7 @@ export default defineNuxtConfig({
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || '',
       apiGatewayUrl: process.env.NUXT_PUBLIC_API_GATEWAY_URL || '',
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
-      useMockBackend: process.env.NUXT_PUBLIC_USE_MOCK_BACKEND ?? 'true',
     },
-    adminEmails: process.env.ADMIN_EMAILS || '',
   },
 
   pinia: {
@@ -26,11 +24,13 @@ export default defineNuxtConfig({
 
   routeRules: {
     '/': { ssr: false },
+    '/dashboard': { ssr: false },
     '/focus': { ssr: false },
     '/tasks': { ssr: false },
     '/calendar': { ssr: false },
     '/agent': { ssr: false },
     '/profile': { ssr: false },
+    '/author': { ssr: false },
     '/admin': { ssr: false },
     '/admin/**': { ssr: false },
   },
@@ -41,7 +41,7 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Focus Mode',
+      title: 'FCAJ Worklog Repository  — AI-Powered Focus & Productivity',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },

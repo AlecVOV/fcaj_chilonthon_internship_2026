@@ -1,200 +1,248 @@
 # Cloud Migration Plan — Focus Mode App
 
-> **Current State:** POC Demo Mode (hardcoded credentials, IndexedDB mock data)  
-> **Target State:** Cloud Mode (Supabase Auth, AWS Lambda, Amazon SES)  
-> **Toggle Flag:** `NUXT_PUBLIC_USE_MOCK_BACKEND` in `.env`
+> Cập nhật 2026-06-29 — đồng bộ với bản cài đặt cloud-only hiện tại.
+
+> **Current State:** Cloud-only (Supabase Auth + Supabase PostgreSQL/pgvector). Frontend và Supabase đã hoàn tất.
+> **Target State:** Bổ sung tính toán AI trên **AWS Lambda + API Gateway + Amazon Bedrock** (phần lớn CHƯA deploy).
+> **AI Toggle:** `NUXT_PUBLIC_API_GATEWAY_URL` trong `.env` — chưa cấu hình thì tính năng AI báo lỗi (không còn mock fallback cho Agent).
 
 ---
 
 ## Overview
 
-This document provides **step‑by‑step instructions** for migrating the Focus Mode App from the Proof‑of‑Concept (POC) demo mode to a fully cloud‑native architecture running on **Supabase Cloud** and **AWS Serverless**.
+This document provides **step‑by‑step instructions** for the cloud‑native architecture of the Focus Mode App running on **Supabase Cloud** and (planned) **AWS Serverless**.
 
-The migration is designed to be **incremental** — each step can be tested independently before moving to the next. The flag `NUXT_PUBLIC_USE_MOCK_BACKEND` controls which mode the app runs in:
+Toàn bộ luồng offline-first / mock backend ĐÃ BỊ GỠ: không còn IndexedDB/Dexie, sync queue, Last-Write-Wins, hay cờ `NUXT_PUBLIC_USE_MOCK_BACKEND`. Mọi read/write của frontend đi thẳng tới Supabase. Phần còn lại cần làm chủ yếu là tầng tính toán AI trên AWS.
 
-| Flag Value | Mode | Auth | Data Storage | API |
-|---|---|---|---|---|
-| `true` (default) | POC Demo | Hardcoded credentials | IndexedDB (Dexie) | Mock responses |
-| `false` | Cloud Production | Supabase Auth | Supabase PostgreSQL | AWS Lambda via API Gateway |
+| Tầng | Trạng thái |
+|---|---|
+| Frontend (Nuxt 4 + Vue 3 + Pinia + Tailwind) | ✅ Cloud-only, hoàn tất |
+| Supabase (Postgres + Auth + pgvector) | ✅ Schema + RLS + trigger + seed hoàn tất |
+| AWS Lambda (AI) | ⚠️ Mới một phần — chỉ `agent-bff` & `agent-action-handler` có code, còn lại mới README |
+| API Gateway / Bedrock | ⚠️ Có spec (`openapi.yaml`, action-group) nhưng CHƯA deploy |
+| CI/CD / IaC | ❌ Chưa có (chỉ vài `deploy.sh` lẻ) |
 
 ---
 
-## Step 1: Enable Supabase Auth
+## Step 1: Supabase Auth & Database
 
 ### 1.1 Create a Supabase Project
 
 1. Go to [supabase.com](https://supabase.com) and sign in.
 2. Create a new project. Note the **Project URL** and **anon public key**.
-3. Set them in `.env`:
+3. Set them in `.env` (xem `web/.env.example`):
    ```env
    NUXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
    NUXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIs...
    ```
 
-### 1.2 Run the Database Schema
+### 1.2 Run the Database Migrations (theo đúng thứ tự)
 
-1. Open the Supabase SQL Editor.
-2. Paste and run the contents of `docs/database/schema.sql`.
-   This creates tables: `users`, `tasks`, `focus_sessions`, `daily_worklogs`, `media_library`.
+Mở Supabase SQL Editor và chạy lần lượt các migration trong `supabase/migrations/`:
 
-### 1.3 Create User Profiles Table
+| # | File | Nội dung |
+|---|---|---|
+| 00001 | `00001_initial_schema.sql` | Extensions (uuid-ossp, pgcrypto, vector); các bảng `users`, `tasks`, `focus_sessions`, `daily_worklogs`, `daily_stats`, `media_library`, `sync_log`; functions `update_modified_column`, `search_similar_content`, `get_user_streak`; RLS cơ sở. |
+| 00002 | `00002_seed_admin_users.sql` | Seed tài khoản admin. |
+| 00003 | `00003_auth_trigger.sql` | Trigger `handle_new_user()` đồng bộ `auth.users` → `public.users`. |
+| 00004 | `00004_seed_admin_users.sql` | Seed admin (bổ sung). |
+| 00005 | `00005_seed_demo_accounts.sql` | Seed 2 tài khoản demo vào `auth.users` + `public.users`: admin `admin@focusmode.app` / `admin123`, user `user@focusmode.app` / `user123` (pre-approved, bypass duyệt). |
+| 00006 | `00006_user_approval_status.sql` | Thêm cột `users.status` (pending\|approved\|rejected); function `is_admin()` (SECURITY DEFINER, chống đệ quy RLS); cập nhật trigger set role + status; RLS trên `public.users`. |
+| 00007 | `00007_drop_legacy_approval.sql` | Drop bảng legacy `public.user_requests` (luồng duyệt cũ không còn dùng). |
 
-Add a trigger to auto‑create a `public.profiles` row when a new user signs up:
+> RLS bổ sung cũng nằm trong `supabase/rls_policies.sql` — áp dụng sau `00001`.
+
+### 1.3 User Table & Auto-Provision Trigger
+
+App KHÔNG dùng bảng `public.profiles`. Bảng người dùng cấp ứng dụng là `public.users` (định nghĩa ở `00001`):
 
 ```sql
-CREATE TABLE public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT,
-  display_name TEXT,
-  role TEXT DEFAULT 'user' CHECK (role IN ('admin', 'user')),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS public.users (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email           TEXT NOT NULL UNIQUE,
+  display_name    TEXT,
+  role            TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  status          TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending', 'approved', 'rejected')),  -- thêm ở 00006
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+```
 
+Mỗi lần có sign-up (INSERT vào `auth.users`), trigger tự tạo một dòng `public.users` tương ứng, đặt `role` + `status` (phiên bản ở `00006`):
+
+```sql
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_is_admin boolean;
 BEGIN
-  INSERT INTO public.profiles (id, email, display_name, role)
-  VALUES (NEW.id, NEW.email, NEW.email, 'user');
+  v_is_admin := NEW.email = ANY(ARRAY[
+    'lehoangtrietthong@gmail.com',
+    'lehoangtrietthong2102004@gmail.com',
+    'lhtthong.forwork@outlook.com',
+    'lhtthong.forwork@gmail.com',
+    'admin@focusmode.app'
+  ]);
+
+  INSERT INTO public.users (id, email, display_name, role, status)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data ->> 'display_name', split_part(NEW.email, '@', 1)),
+    CASE WHEN v_is_admin THEN 'admin' ELSE 'user' END,
+    CASE WHEN v_is_admin THEN 'approved' ELSE 'pending' END
+  )
+  ON CONFLICT (id) DO NOTHING;
+
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 ```
 
-### 1.4 Set Admin Users
+### 1.4 User Approval Workflow (qua `users.status`, KHÔNG còn user_requests/edge function)
 
-After creating the admin account, set its role:
+Luồng duyệt user hiện tại hoàn toàn dựa trên cột `public.users.status` và chạy từ frontend:
 
-```sql
-UPDATE public.profiles SET role = 'admin' WHERE email = 'admin@focusmode.app';
-```
+- Sign-up → `handle_new_user()` đặt `status = 'pending'` (admin tự `'approved'`).
+- Đăng nhập (`composables/useAuth.ts` → `login()`) chặn user `pending`/`rejected`; admin luôn được vào.
+- Admin duyệt/từ chối bằng cách `UPDATE public.users.status`:
+  - `getPendingUsers()` → liệt kê user `status='pending'`.
+  - `approveUser(id)` → `UPDATE users SET status='approved'`.
+  - `rejectUser(id)` → `UPDATE users SET status='rejected'`.
+  - UI: trang `pages/admin/users.vue`.
+- Bảo mật bằng RLS function `is_admin()` (xem 1.5).
 
-### 1.5 Switch Auth Mode
+> ĐÃ GỠ (migration 00007): bảng `public.user_requests`, Edge Function `supabase/functions/approve-user`, và bảng `public.profiles` (chưa từng tồn tại). Tuyệt đối không cấu hình lại các thành phần này.
 
-In `.env`, set:
-```env
-NUXT_PUBLIC_USE_MOCK_BACKEND=false
-```
-
-The `composables/useAuth.ts` will now call Supabase Auth instead of hardcoded credentials. Test login with real Supabase credentials.
-
----
-
-## Step 2: Replace Mock Data with Supabase Realtime
-
-### 2.1 Uncomment Supabase Calls in `useDataService.ts`
-
-The composable `composables/useDataService.ts` contains `// TODO: Cloud` comments marking where Supabase calls should replace the IndexedDB mock.
-
-Uncomment and implement the Supabase queries. Example for tasks:
-
-```typescript
-// In composables/useDataService.ts
-
-import { getSupabase } from '~/lib/supabaseClient'
-
-async function getTasks(): Promise<Task[]> {
-  if (useMockBackend.value) {
-    // ... existing mock code ...
-  }
-
-  // CLOUD: fetch from Supabase
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  if (error) throw error
-  return data as Task[]
-}
-```
-
-### 2.2 Enable Row Level Security (RLS)
-
-In Supabase SQL Editor, create RLS policies:
+Function chống đệ quy RLS (`00006`):
 
 ```sql
--- Tasks: users can only see their own tasks
-ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can CRUD own tasks" ON public.tasks
-  FOR ALL USING (auth.uid() = user_id);
-
--- Focus sessions: same
-ALTER TABLE public.focus_sessions ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can CRUD own sessions" ON public.focus_sessions
-  FOR ALL USING (auth.uid() = user_id);
-
--- Media: admins can CRUD all; users can read
-ALTER TABLE public.media_library ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Anyone can read media" ON public.media_library
-  FOR SELECT USING (true);
-
-CREATE POLICY "Admins can manage media" ON public.media_library
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
-    )
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql SECURITY DEFINER STABLE
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'
   );
+$$;
 ```
 
-### 2.3 Test Data Flow
+### 1.5 Admin & Demo Accounts
 
-1. Sign in with a Supabase auth account.
-2. Add a task → verify it appears in the Supabase table editor.
-3. Start a focus session → verify `focus_sessions` row created.
+- Admin theo email: các email trong `handle_new_user()` (ví dụ `admin@focusmode.app`) tự nhận `role='admin'`, `status='approved'` khi sign-up. (Đã BỎ override `ADMIN_EMAILS` phía frontend — admin chỉ xác định bằng `public.users.role='admin'`, khớp RLS `is_admin()`.)
+- Demo accounts (`00005`, đã pre-approved, bypass duyệt):
+  - Admin: `admin@focusmode.app` / `admin123`
+  - User: `user@focusmode.app` / `user123`
 
----
+### 1.6 Auth ở Frontend
 
-## Step 3: Deploy AWS Lambda Functions
-
-### 3.1 Emotion Detection Lambda
-
-1. Navigate to `lambdas/focus-emotion-detector/`.
-2. Build the deployment package:
-   ```bash
-   pip install -r requirements.txt -t ./package
-   cd package && zip -r ../function.zip . && cd ..
-   zip function.zip lambda_function.py
-   ```
-3. Upload to AWS Lambda (Python 3.12, 512 MB memory, 15s timeout).
-4. Attach the ONNX model as a Lambda Layer (see `docs/nlp-emotion.md`).
-5. Create an API Gateway trigger: `POST /emotion/detect`.
-
-### 3.2 Report Generator Lambda
-
-1. Navigate to `lambdas/focus-report-generator/`.
-2. Build package with Tectonic layer (see `docs/latex-template.tex`).
-3. Upload the `.tex` template as part of the package.
-4. Set environment variables: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `S3_BUCKET`, `SES_SENDER_EMAIL`.
-5. Create API Gateway trigger: `POST /report`.
-6. Set up EventBridge cron for nightly generation (optional).
-
-### 3.3 RAG Recommender + Admin Vectorizer
-
-Follow the same pattern. See `docs/rag-vectorisation.md` for embedding model setup.
+`composables/useAuth.ts` là cloud-only:
+- `signUp()` → `supabase.auth.signUp` (dòng `public.users` do trigger tạo, `status='pending'`).
+- `login()` → `supabase.auth.signInWithPassword`, rồi đọc `users.role`/`users.status` để gate đăng nhập.
+- Client Supabase khởi tạo trong `lib/supabaseClient.ts` (`getSupabase()`), đọc URL/anon key từ `useRuntimeConfig().public` (`useConfig.ts`).
 
 ---
 
-## Step 4: Update API Gateway Endpoints
+## Step 2: Row Level Security (RLS)
+
+RLS đã bật trên tất cả bảng. Các policy thực tế nằm trong `supabase/rls_policies.sql` + `00006`. Ví dụ khớp với code:
+
+```sql
+-- Tasks: chủ sở hữu CRUD dòng của mình
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users CRUD own tasks" ON public.tasks
+  FOR ALL USING (auth.uid() = user_id);
+
+-- Focus sessions: tương tự
+ALTER TABLE public.focus_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users CRUD own sessions" ON public.focus_sessions
+  FOR ALL USING (auth.uid() = user_id);
+
+-- Media: user đã đăng nhập đọc được; admin quản lý
+ALTER TABLE public.media_library ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone authenticated can read media" ON public.media_library
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins manage media" ON public.media_library
+  FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+  );
+
+-- Users: tự đọc/cập nhật dòng mình; admin đọc + quản lý tất cả (qua is_admin())
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users read own profile" ON public.users
+  FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users update own profile" ON public.users
+  FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Admins read all users" ON public.users
+  FOR SELECT USING (public.is_admin());
+CREATE POLICY "Admins manage all users" ON public.users
+  FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+```
+
+> Lưu ý: policy admin trên `public.users` dùng `is_admin()` (chống đệ quy). Các bảng khác dùng kiểm tra `EXISTS (... role = 'admin')` trực tiếp.
+
+### 2.1 Data Service ở Frontend
+
+`composables/useDataService.ts` gọi thẳng Supabase (map snake_case ↔ camelCase). Pinia stores thực sự tồn tại: `task.store.ts`, `focus.store.ts`, `user.store.ts`. Không còn `sync.store`/`useSyncQueue`.
+
+### 2.2 Test Data Flow
+
+1. Đăng nhập bằng tài khoản Supabase.
+2. Thêm task → kiểm tra dòng trong table editor của Supabase.
+3. Bắt đầu một phiên focus → kiểm tra dòng `focus_sessions`.
+
+---
+
+## Step 3: AWS Lambda Functions (AI — phần lớn CHƯA xong)
+
+Tầng AI dự kiến gồm các Lambda sau. Trạng thái hiện tại:
+
+| Lambda | Trạng thái | Vai trò |
+|---|---|---|
+| `agent-bff` | ✅ Có code (Python) | BFF nhận `POST /agent/chat` từ frontend, gọi Bedrock Agent |
+| `agent-action-handler` | ✅ Có code (Python) | Action group cho Bedrock Agent: create/update/delete task trong Supabase |
+| `emotion-detector` | ⚠️ Chỉ README | Nhận diện cảm xúc journal (focused/stressed/exhausted/relaxed/unmotivated) |
+| `rag-recommender` | ⚠️ Chỉ README | Gợi ý nội dung qua pgvector (`search_similar_content`, model all-MiniLM-L6-v2, 384 chiều) |
+| `report-generator` | ⚠️ Chỉ README | Xuất report (server-side) |
+| `admin-vectorizer` | ⚠️ Chỉ README | Tạo embedding cho media_library |
+
+Layers (`onnx-transformers`, `sentence-transformers`): mới chỉ có spec.
+
+Frontend đã sẵn sàng tích hợp:
+- Agent chat: `useAgentChat` → `POST {API}/agent/chat`. Chưa cấu hình URL → báo lỗi (không có mock).
+- Emotion: `useEmotionDetector` gọi `/emotion` nếu có API, nếu không fallback regex client-side.
+- RAG: `useRAG` gọi `/rag` nếu có, nếu không fallback hardcode.
+- Report: `useReportExport` gọi `/report` nếu có, nếu không tải `.md` ngay tại client.
+
+Quy trình build/deploy một Lambda đã có code (ví dụ `agent-bff`): cài requirements, đóng gói zip, upload (Python 3.12), gắn biến môi trường (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, ...). Chỉ có vài `deploy.sh` lẻ cho 2 Lambda đã có code; CHƯA có IaC chung.
+
+---
+
+## Step 4: API Gateway & Bedrock (có spec — CHƯA deploy)
+
+Spec đã được phác:
+- `aws/api-gateway/openapi.yaml` — định nghĩa route.
+- `aws/bedrock/action-group-openapi.yaml` — action group cho Bedrock Agent.
+
+Khi deploy:
 
 ### 4.1 Create API Gateway
 
-1. In AWS Console, create a REST API (or HTTP API for lower cost).
-2. Create routes:
-   - `POST /emotion/detect` → `focus-emotion-detector` Lambda
-   - `POST /report` → `focus-report-generator` Lambda
-   - `POST /rag/recommend` → `focus-rag-recommender` Lambda
-   - `POST /admin/vectorize` → `focus-admin-vectorize` Lambda
-3. Configure JWT authorizer using Supabase public key.
-4. Deploy to a stage (e.g., `prod`).
+1. Tạo REST/HTTP API.
+2. Tạo route trỏ tới Lambda tương ứng, ví dụ:
+   - `POST /agent/chat` → `agent-bff`
+   - `POST /emotion` → `emotion-detector`
+   - `POST /rag` → `rag-recommender`
+   - `POST /report` → `report-generator`
+3. Cấu hình JWT authorizer dùng Supabase public key.
+4. Deploy lên một stage (ví dụ `prod`).
 
 ### 4.2 Update Environment Variable
 
@@ -204,86 +252,70 @@ NUXT_PUBLIC_API_GATEWAY_URL=https://YOUR_API_ID.execute-api.ap-southeast-1.amazo
 
 ### 4.3 Test API Calls
 
-From the browser console:
-```javascript
-const res = await $fetch('/api/emotion/detect', {
-  method: 'POST',
-  body: { journal_text: 'I felt very focused today!' }
-})
-console.log(res) // { label: 'focused', confidence: 0.89 }
-```
+Sau khi cấu hình URL, mở trang `/agent` và gửi tin nhắn để xác nhận luồng `agent-bff` → Bedrock Agent → `agent-action-handler`.
 
 ---
 
-## Step 5: Final Switch & Testing
+## Step 5: Verification & Deploy
 
-### 5.1 Switch Off Mock Mode
+### 5.1 Verify Everything
 
-```env
-NUXT_PUBLIC_USE_MOCK_BACKEND=false
-```
+| Check | How to test | Trạng thái |
+|---|---|---|
+| Auth | Đăng nhập bằng Supabase; session persist | ✅ Sẵn sàng |
+| Approval gate | User mới `pending` bị chặn; admin duyệt qua `admin/users` | ✅ Sẵn sàng |
+| Tasks CRUD | Thêm/sửa/xóa task; kiểm tra trong Supabase | ✅ Sẵn sàng |
+| Focus sessions | Bắt đầu/kết thúc timer; kiểm tra dòng session | ✅ Sẵn sàng |
+| RLS | Thử truy cập dữ liệu user khác → bị chặn | ✅ Sẵn sàng |
+| Admin access | Đăng nhập admin; vào được `/admin/*` | ✅ Sẵn sàng |
+| Agent chat | Gửi tin ở `/agent` (cần API Gateway URL) | ⚠️ Cần deploy AWS |
+| Emotion detection | Submit journal; nhận label | ⚠️ Fallback client-side; Lambda chưa code |
+| Report export | "Export Report" | ⚠️ Hiện tải `.md` ở client; Lambda chưa code |
 
-### 5.2 Verify Everything
-
-| Check | How to test |
-|---|---|
-| Auth | Sign in with Supabase credentials; session persists |
-| Tasks CRUD | Add/edit/delete tasks; verify in Supabase table editor |
-| Focus sessions | Start/end a focus timer; verify session row |
-| Emotion detection | Submit journal text; verify Lambda returns label |
-| Report export | Click "Export Report"; verify PDF email or S3 upload |
-| Admin access | Sign in as admin; verify /admin/* routes work |
-| RLS | Try to access another user's data via API → should be blocked |
-
-### 5.3 Deploy to Cloudflare Pages
+### 5.2 Deploy Frontend
 
 ```bash
 npm run build
-npx wrangler pages deploy .output/public
 ```
 
-Set environment variables in the Cloudflare Pages dashboard.
-
----
-
-## Quick Reference: How to Test Both Modes
-
-### POC Demo Mode (default)
-```env
-NUXT_PUBLIC_USE_MOCK_BACKEND=true
-```
-- Login: `admin@focusmode.app` / `admin123` (admin) or `user@focusmode.app` / `user123` (user)
-- Data is stored in IndexedDB (browser memory)
-- API calls return mock data
-- No internet required
-
-### Cloud Mode
-```env
-NUXT_PUBLIC_USE_MOCK_BACKEND=false
-```
-- Login via Supabase Auth (real credentials)
-- Data stored in Supabase PostgreSQL
-- API calls go to AWS Lambda via API Gateway
-- Requires internet + configured AWS/Supabase accounts
+Triển khai thư mục `.output` (ví dụ Cloudflare Pages / Netlify / host tĩnh), đặt biến môi trường trên dashboard của nền tảng. CHƯA có pipeline CI/CD — build và deploy thủ công.
 
 ---
 
 ## Code Architecture Reference
 
 ```
-frontend/
+web/
 ├── composables/
-│   ├── useConfig.ts        ← Reads NUXT_PUBLIC_USE_MOCK_BACKEND
-│   ├── useAuth.ts          ← mock/cloud auth switch
-│   └── useDataService.ts   ← mock/cloud data switch
+│   ├── useConfig.ts          ← Đọc Supabase + API Gateway URL
+│   ├── useAuth.ts            ← Cloud-only auth + approval gate (users.status)
+│   ├── useDataService.ts     ← Gọi thẳng Supabase (map snake_case↔camelCase)
+│   ├── useAgentChat.ts       ← Agent chat → POST {API}/agent/chat
+│   ├── useEmotionDetector.ts ← /emotion hoặc fallback regex
+│   ├── useRAG.ts             ← /rag hoặc fallback hardcode
+│   └── useReportExport.ts    ← /report hoặc tải .md ở client
+├── lib/
+│   └── supabaseClient.ts     ← getSupabase()
+├── stores/
+│   ├── task.store.ts
+│   ├── focus.store.ts
+│   └── user.store.ts
 ├── middleware/
-│   ├── auth.ts             ← Global auth guard
-│   └── admin.ts            ← Admin-only route guard
+│   ├── auth.ts               ← Global auth guard
+│   └── admin.ts              ← Admin-only route guard
 ├── pages/
 │   └── admin/
-│       ├── users.vue       ← Admin user list
-│       └── media.vue       ← Admin media CRUD
-└── .env.example            ← Environment template
+│       ├── users.vue         ← Duyệt user (approve/reject qua users.status)
+│       └── media.vue         ← Admin media CRUD
+└── .env.example              ← Mẫu biến môi trường (Supabase + API Gateway)
+
+supabase/
+├── migrations/00001..00007*.sql  ← Schema, seed, trigger, status, drop legacy
+└── rls_policies.sql              ← RLS bổ sung
+
+aws/
+├── api-gateway/openapi.yaml          ← Spec (chưa deploy)
+└── bedrock/action-group-openapi.yaml ← Spec (chưa deploy)
 ```
 
-*Report generated May 22, 2026*
+*Cập nhật June 29, 2026 — đồng bộ với bản cài đặt cloud-only hiện tại.*

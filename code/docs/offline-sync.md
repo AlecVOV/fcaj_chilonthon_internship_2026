@@ -1,13 +1,20 @@
-# Offline-First Sync — Conflict Resolution & Queue Logic (Nuxt 4 / TypeScript)
+# Offline Behavior — Connectivity Indicator (Cloud-Only) (Nuxt 4 / TypeScript)
 
-> **Project:** Focus Mode App (Web-Only)  
-> **Strategy:** Last-Write-Wins (LWW) based on `updated_at` timestamp  
-> **Local DB:** Dexie.js (IndexedDB)  
-> **Remote DB:** Supabase PostgreSQL  
+> Cập nhật 2026-06-29 — đồng bộ với bản cài đặt cloud-only hiện tại.
+
+> **Project:** Focus Mode App (Web-Only)
+> **Strategy:** Cloud-only — every read/write goes straight to Supabase
+> **Local DB:** None (no IndexedDB / Dexie)
+> **Remote DB:** Supabase PostgreSQL
+> **Offline support:** Connectivity *indicator* only — no offline writes, no queue, no auto-resync
 
 ---
 
 ## 1. Architecture Overview
+
+The app is **cloud-only**. There is no local database and no synchronization layer.
+All reads and writes are issued directly against Supabase. The browser's online/offline
+state is surfaced purely as a UI hint so the user knows when a save might fail.
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -23,282 +30,154 @@
 │                  │  (useXxx)     │                 │
 │                  └──────┬───────┘                 │
 │                         │                          │
-│         ┌───────────────┼───────────────┐         │
-│         │               │               │         │
-│  ┌──────▼──────┐ ┌──────▼──────┐ ┌─────▼──────┐  │
-│  │ Dexie.js     │ │ SyncQueue   │ │ Supabase    │  │
-│  │ (IndexedDB)  │ │ Manager     │ │ Client      │  │
-│  └──────────────┘ └──────┬──────┘ └─────┬──────┘  │
-│                          │               │         │
-└──────────────────────────┼───────────────┼────────┘
-                           │               │
-                   ┌───────▼───────────────▼───────┐
-                   │  navigator.onLine +            │
-                   │  window 'online'/'offline'     │
-                   │  event listeners               │
-                   └───────────────────────────────┘
+│              ┌──────────▼──────────┐              │
+│              │  Supabase Client     │              │
+│              │  (direct read/write) │              │
+│              └──────────┬──────────┘              │
+│                         │                          │
+│              ┌──────────▼──────────┐              │
+│              │  useOffline          │              │
+│              │  navigator.onLine +  │              │
+│              │  'online'/'offline'  │              │
+│              │  → UI indicator only │              │
+│              └─────────────────────┘              │
+└──────────────────────────────────────────────────┘
 ```
 
-## 2. Write Path (Always Local First)
+## 2. Write Path (Always Remote)
+
+There is **no "local first"** anymore. Every action talks to Supabase directly.
 
 ```
 User Action (Create/Update/Delete Task or Session)
     │
     ▼
-1. Write to Dexie IndexedDB immediately
+1. Pinia store / composable calls Supabase (insert / update / delete)
     │
     ▼
-2. Auto-enqueue operation to SyncQueue table (via Dexie hooks):
-   { localId, tableName, recordId, operation, payload(JSON), createdAt, retryCount: 0 }
+2. On success → store state refreshed from the returned/refetched rows
     │
     ▼
-3. Pinia store updates optimistically (reactive UI)
-    │
-    ▼
-4. If navigator.onLine === true → trigger syncQueueManager.processQueue()
+3. On failure (e.g. offline / network error) → the operation simply errors;
+   nothing is queued and nothing is retried automatically
 ```
 
-## 3. SyncQueueManager (TypeScript)
+Data access lives in:
 
-### 3.1 `services/sync.service.ts`
+- **`web/composables/useDataService.ts`** — shared reads/writes, maps Supabase
+  `snake_case` ↔ app `camelCase`, calls `getSupabase()` directly.
+- **`web/stores/task.store.ts`** — task CRUD against Supabase.
+- **`web/stores/focus.store.ts`** — focus/Pomodoro session state.
+
+> Note: a few interfaces (e.g. `Task`, `FocusSession`) still carry an `isSynced`
+> field for backward compatibility, but it is always set to `true` and is no
+> longer used for any sync logic.
+
+## 3. Connectivity Indicator — `useOffline`
+
+The only "offline" feature left is a connectivity indicator. It reads
+`navigator.onLine`, listens for the browser `online` / `offline` events, and
+exposes two reactive flags. It does **not** queue, store, or replay anything.
 
 ```typescript
-// services/sync.service.ts
-import { getDB, type SyncQueueItem } from '~/database/indexeddb_schema'
-import type { SupabaseClient } from '@supabase/supabase-js'
+// web/composables/useOffline.ts
+export function useOffline() {
+  const isOnline = ref(true)
+  const showOfflineToast = ref(false)
 
-let isSyncing = false
-const MAX_RETRIES = 5
-
-export function useSyncService(supabase: SupabaseClient) {
-  const db = getDB()
-
-  /** Process pending sync items sequentially. */
-  async function processQueue(): Promise<{ synced: number; failed: number }> {
-    if (isSyncing) return { synced: 0, failed: 0 }
-    if (!navigator.onLine) return { synced: 0, failed: 0 }
-
-    isSyncing = true
-    let synced = 0
-    let failed = 0
-
-    try {
-      const items = await db.getPendingSyncItems(50)
-
-      for (const item of items) {
-        try {
-          await pushToServer(item)
-          await db.removeSyncItem(item.localId)
-          await markRecordSynced(item.tableName, item.recordId)
-          synced++
-        } catch (err: any) {
-          if (err?.name === 'NetworkError' || err?.status === 0) {
-            await db.incrementRetry(item.localId, err.message)
-            failed++
-            break // Network down — stop, retry next cycle
-          }
-
-          if (item.retryCount >= MAX_RETRIES) {
-            console.error(`Sync failed after ${MAX_RETRIES} retries:`, item)
-            await db.removeSyncItem(item.localId)
-            failed++
-            continue
-          }
-
-          await db.incrementRetry(item.localId, err.message)
-          failed++
-        }
-      }
-    } finally {
-      isSyncing = false
-    }
-
-    return { synced, failed }
+  function updateOnlineStatus() {
+    isOnline.value = navigator.onLine
+    if (!isOnline.value) { showOfflineToast.value = true }
+    else { setTimeout(() => { showOfflineToast.value = false }, 2000) }
   }
 
-  /** Push a single sync item to Supabase. */
-  async function pushToServer(item: SyncQueueItem): Promise<void> {
-    const table = supabase.from(item.tableName)
-    const payload = JSON.parse(item.payload)
+  onMounted(() => {
+    updateOnlineStatus()
+    window.addEventListener('online', updateOnlineStatus)
+    window.addEventListener('offline', updateOnlineStatus)
+  })
+  onUnmounted(() => {
+    window.removeEventListener('online', updateOnlineStatus)
+    window.removeEventListener('offline', updateOnlineStatus)
+  })
 
-    switch (item.operation) {
-      case 'INSERT':
-        await table.insert(payload)
-        break
-      case 'UPDATE':
-        await table.update(payload).eq('id', item.recordId)
-        break
-      case 'DELETE':
-        await table.delete().eq('id', item.recordId)
-        break
-    }
-  }
-
-  /** Mark the local record as synced. */
-  async function markRecordSynced(
-    tableName: string,
-    recordId: string
-  ): Promise<void> {
-    if (tableName === 'tasks') {
-      await db.markTaskSynced(recordId)
-    } else if (tableName === 'focus_sessions') {
-      await db.markSessionSynced(recordId)
-    }
-  }
-
-  /** Enqueue a sync operation. */
-  async function enqueue(
-    tableName: string,
-    recordId: string,
-    operation: 'INSERT' | 'UPDATE' | 'DELETE',
-    payload: Record<string, unknown>
-  ): Promise<void> {
-    await db.enqueueSync(tableName, recordId, operation, payload)
-  }
-
-  async function pendingCount(): Promise<number> {
-    return db.pendingSyncCount()
-  }
-
-  return { processQueue, enqueue, pendingCount, isSyncing: () => isSyncing }
+  return { isOnline, showOfflineToast }
 }
 ```
 
-## 4. Conflict Resolution — Last-Write-Wins (LWW)
+## 4. Where the Indicator Is Used
 
-### 4.1 Rationale
-
-Single-user productivity app. Multi-device simultaneous edits are rare. LWW is simple and correct.
-
-### 4.2 Resolution Logic
-
-```
-Server record.updated_at > Client record.updated_at?
-    │
-    ├── YES → Server wins. Overwrite local IndexedDB with server data.
-    │
-    └── NO  → Client wins. Write client data to server.
-```
-
-Equal timestamps → server wins (prefer authoritative source).
-
-### 4.3 pullFromServer (Periodic Sync)
-
-```typescript
-// services/sync.service.ts (continued)
-
-async function pullFromServer(userId: string): Promise<void> {
-  // Pull tasks
-  const { data: serverTasks } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('user_id', userId)
-
-  if (serverTasks) {
-    for (const serverTask of serverTasks) {
-      const localTask = await db.localTasks.get(serverTask.id)
-
-      if (!localTask) {
-        await db.localTasks.put({ ...serverTask, isSynced: true })
-      } else if (
-        new Date(serverTask.updated_at) > new Date(localTask.updatedAt)
-      ) {
-        await db.localTasks.put({ ...serverTask, isSynced: true })
-      }
-      // Else: local newer — keep local (will push on next cycle)
-    }
-  }
-
-  // Pull focus sessions
-  const { data: serverSessions } = await supabase
-    .from('focus_sessions')
-    .select('*')
-    .eq('user_id', userId)
-
-  if (serverSessions) {
-    for (const serverSession of serverSessions) {
-      const localSession = await db.localFocusSessions.get(serverSession.id)
-
-      if (!localSession) {
-        await db.localFocusSessions.put({ ...serverSession, isSynced: true })
-      } else if (
-        new Date(serverSession.updated_at) > new Date(localSession.updatedAt)
-      ) {
-        await db.localFocusSessions.put({ ...serverSession, isSynced: true })
-      }
-    }
-  }
-}
-```
-
-## 5. Sync Triggers
-
-| Trigger | Action |
+| Consumer | Behavior |
 |---|---|
-| **App load** | `processQueue()` if online |
-| **Network regained** | `window.addEventListener('online', () => processQueue())` |
-| **After any local write** | Debounced `processQueue()` (500ms) |
-| **Periodic polling** | `setInterval(() => processQueue(), 5 * 60 * 1000)` |
-| **Manual refresh** | User clicks "Sync Now" button |
-| **Tab focus** | `document.addEventListener('visibilitychange', ...)` → sync on focus |
+| **`web/components/SyncStatus.vue`** | Renders a colored dot + the text `Online` / `Offline` based on `isOnline`. Nothing else — no "Sync Now", no pending count. |
+| **`web/pages/dashboard.vue`** | Shows a single warning toast when `showOfflineToast` is true: *"You are offline. Changes may not be saved until your connection is restored."* The toast auto-hides ~2s after connectivity returns. |
 
-### 5.1 Network Listener Setup (Nuxt Plugin)
+`SyncStatus.vue` (full component):
 
-```typescript
-// plugins/sync.client.ts
-export default defineNuxtPlugin(() => {
-  const { $supabase } = useNuxtApp()
-  const syncService = useSyncService($supabase as SupabaseClient)
+```vue
+<template>
+  <div class="flex items-center gap-1.5">
+    <span class="status-dot" :class="isOnline ? 'online' : 'offline'" />
+    <span class="text-sm" :class="isOnline ? 'text-success dark:text-success' : 'text-error dark:text-error'">
+      {{ isOnline ? 'Online' : 'Offline' }}
+    </span>
+  </div>
+</template>
 
-  window.addEventListener('online', () => {
-    console.log('[Sync] Network restored — processing queue')
-    syncService.processQueue()
-  })
+<script setup lang="ts">
+import { useOffline } from '~/composables/useOffline'
 
-  const interval = setInterval(() => {
-    if (navigator.onLine) syncService.processQueue()
-  }, 5 * 60 * 1000)
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && navigator.onLine) {
-      syncService.processQueue()
-    }
-  })
-
-  return {
-    provide: { syncService },
-  }
-})
+const { isOnline } = useOffline()
+</script>
 ```
 
-## 6. Edge Cases Handled
+## 5. What Happens When You Go Offline
 
-| Scenario | Behavior |
-|---|---|
-| **Tab closed mid-sync** | Sync items persist in IndexedDB; processed on next load |
-| **Network timeout** | Retry with exponential backoff (1s→2s→4s→8s→16s), max 5 retries |
-| **Server returns 409 Conflict** | Apply LWW: compare `updated_at`, keep newer |
-| **Record deleted on server** | Client UPDATE for deleted record → discard, remove local |
-| **Large payload** | Batch of 50; JSON stored as TEXT in IndexedDB |
-| **Two tabs open** | Each tab has own Dexie; server `updated_at` deconflicts |
-| **Storage full** | Dexie throws `QuotaExceededError` → surface warning to user |
+- The status dot flips to **Offline** and the dashboard shows the warning toast.
+- Any write you attempt while offline (or that hits a network error) **fails**;
+  the error surfaces to the caller. The change is **not** saved locally and is
+  **not** retried when you come back online.
+- When connectivity returns, the indicator flips back to **Online** and the toast
+  fades. There is **no automatic re-sync** — reopen/refresh the page (or repeat the
+  action) to pick up the latest server state.
 
-## 7. IndexedDB Schema for Sync
+## 6. Previous Design Removed (Historical)
 
-```typescript
-// Each local table includes:
-isSynced: boolean;           // true after successful server push
-syncOperation?: 'INSERT' | 'UPDATE' | 'DELETE';  // set by Dexie hooks
-```
+The app used to be **offline-first** with an IndexedDB cache and a background sync
+layer. That entire design has been **removed** in favor of the simpler cloud-only
+model documented above. None of the pieces below exist in the codebase anymore.
 
-Dexie hooks auto-set `isSynced = false` and `syncOperation` on every write.
+What was removed:
 
-## 8. Testing the Sync Queue
+- **Dexie.js / IndexedDB local store** — local mirror of `tasks` / `focus_sessions`.
+- **`web/lib/db.ts`** — Dexie schema + local table helpers. **Deleted.**
+- **`web/composables/useSyncQueue.ts`** — the `SyncQueueManager` (`processQueue`,
+  `pushToServer`, `pullFromServer`, retry/backoff). **Deleted.**
+- **Sync queue table** — pending `INSERT/UPDATE/DELETE` operations persisted in
+  IndexedDB and replayed when online.
+- **Last-Write-Wins (LWW) conflict resolution** — comparing `updated_at` between
+  local and server records on pull.
+- **Sync triggers** — the old network-`online` listener, periodic polling
+  (`setInterval`), `visibilitychange` re-sync, and the "Sync Now" button.
+- **Mock backend** — the `NUXT_PUBLIC_USE_MOCK_BACKEND` flag and in-memory mock /
+  OTP stores.
 
-See `testing-plan.md`. Key test cases:
+**Why it was removed:** for a single-user productivity app talking to a managed
+Postgres (Supabase) backend, the offline-first machinery added significant
+complexity (a second source of truth, conflict resolution, queue retries, quota
+handling) for little real-world benefit. Going **cloud-only** makes Supabase the
+single source of truth, removes whole classes of sync bugs, and keeps the data
+layer easy to reason about. The lightweight connectivity indicator (Section 3)
+covers the one piece of offline UX that's still worth keeping: telling the user
+when their changes might not save.
 
-- Insert offline → go online → verify server has record
-- Update offline + update online → LWW resolves to newer
-- Delete offline → go online → server record deleted
-- Network failure mid-batch → remaining items retried next cycle
-- Max retries exceeded → item removed from queue, error logged
+## 7. Testing
+
+Because there is no sync queue or conflict resolution, the historical sync test
+cases (offline insert → online push, LWW resolution, retry/backoff, etc.) no
+longer apply. The remaining surface to test is small:
+
+- Toggle network off → `SyncStatus.vue` shows **Offline** and the dashboard toast
+  appears.
+- Toggle network on → indicator returns to **Online** and the toast auto-hides.
+- Attempting a write while offline surfaces an error (no silent local save).

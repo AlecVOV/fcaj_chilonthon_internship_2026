@@ -7,19 +7,22 @@ import { useAuth } from '~/composables/useAuth'
 export default defineNuxtRouteMiddleware((to) => {
   const { isAuthenticated, isAdmin } = useAuth()
 
-  if (to.path === '/login') return
+  // Public routes — no auth needed
+  if (to.path === '/login' || to.path === '/' || to.path === '/author') return
 
   if (!isAuthenticated.value) {
     return navigateTo(`/login?redirect=${encodeURIComponent(to.fullPath)}`)
   }
 
   // Admin users: redirect user-only routes to admin panel
-  if (isAdmin.value && to.path === '/') {
+  // /profile is accessible to admins too (they need to manage their own account)
+  const adminUserPages = ['/dashboard', '/focus', '/tasks', '/calendar', '/agent']
+  if (isAdmin.value && adminUserPages.includes(to.path)) {
     return navigateTo('/admin')
   }
 
   // Non-admin users: redirect admin routes to dashboard
   if (!isAdmin.value && to.path.startsWith('/admin')) {
-    return navigateTo('/')
+    return navigateTo('/dashboard')
   }
 })
