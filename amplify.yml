@@ -10,8 +10,10 @@ applications:
     frontend:
       phases:
         preBuild:
+          # npm install (không phải npm ci): khoan dung khi package-lock.json lệch
+          # nhẹ với package.json — tránh fail "can only install when in sync".
           commands:
-            - npm ci
+            - npm install
         build:
           # NITRO_PRESET=static ép Nitro xuất SPA tĩnh ra .output/public.
           # (Trong môi trường Amplify, Nitro mặc định chọn preset 'aws-amplify'
