@@ -24,3 +24,9 @@ Thumbs.db
 # ── Editor / misc ──────────────────────────────
 .vscode/
 *.local
+
+# ── Media / audio (host trên S3, KHÔNG commit vào git) ──
+# File nhạc nền nặng → upload thẳng S3; giữ aws/s3/link.txt để tra nguồn.
+*.mp3
+*.wav
+*.m4a

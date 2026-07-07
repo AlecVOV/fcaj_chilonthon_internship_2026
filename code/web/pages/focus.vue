@@ -2,7 +2,7 @@
   <div class="animate-in">
     <h1 class="mb-6 font-display text-display-sm text-ink dark:text-on-dark">Focus Session</h1>
 
-    <div v-if="focusStore.isIdle" class="grid gap-6 lg:grid-cols-3">
+    <div v-if="focusStore.isIdle" class="grid gap-6 lg:grid-cols-3 lg:items-start">
       <div class="card lg:col-span-2 space-y-6">
         <div>
           <label class="block mb-2 text-xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Duration</label>

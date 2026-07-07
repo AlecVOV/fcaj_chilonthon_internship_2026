@@ -61,22 +61,36 @@
       <div class="card"><FocusTimer /></div>
     </div>
 
-    <!-- Analytics charts — computed client-side from tasks + focus sessions -->
+    <!-- Weekly activity — navigable week by week -->
+    <div>
+      <div class="mb-3 flex items-center justify-between">
+        <h2 class="font-display text-lg text-ink dark:text-on-dark">Weekly activity</h2>
+        <div class="flex items-center gap-1 text-sm">
+          <button @click="weekOffset++" class="btn-ghost px-2 py-1" title="Previous week">←</button>
+          <span class="min-w-[150px] text-center text-xs text-ink-body dark:text-on-dark-soft">{{ weekRangeLabel }}</span>
+          <button @click="weekOffset = Math.max(0, weekOffset - 1)" :disabled="weekOffset === 0" class="btn-ghost px-2 py-1 disabled:cursor-not-allowed disabled:opacity-30" title="Next week">→</button>
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="card">
+          <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Focus time (minute) — hover a bar for sessions</h3>
+          <ChartBars :data="focusWeek" color="#cc785c" unit="m" />
+        </div>
+        <div class="card">
+          <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Tasks completed</h3>
+          <ChartBars :data="completedWeek" color="#5db872" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Snapshots (current state, not week-based) -->
     <div class="grid gap-4 sm:grid-cols-2">
-      <div class="card">
-        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Focus time · 7 day (minute)</h3>
-        <ChartBars :data="focus7d" color="#cc785c" unit="m" />
-      </div>
-      <div class="card">
-        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Tasks completed · 7 day</h3>
-        <ChartBars :data="completed7d" color="#5db872" />
-      </div>
       <div class="card">
         <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Task status</h3>
         <ChartDonut :data="statusData" />
       </div>
       <div class="card">
-        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Task open with priority</h3>
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Open tasks by priority</h3>
         <ChartHBars :data="priorityData" />
       </div>
     </div>
@@ -109,20 +123,32 @@ const sessionsToday = ref(0)
 const streak = ref(0)
 const dominantMood = ref('--')
 const allSessions = ref<any[]>([])
+const weekOffset = ref(0) // 0 = last 7 days ending today; +1 = previous week, etc.
 
-// ── Chart data (client-side from tasks + sessions) ────────────────────────
-function last7() { return Array.from({ length: 7 }, (_, i) => dayjs().subtract(6 - i, 'day')) }
-const focus7d = computed(() => last7().map((d) => {
+// ── Weekly charts (navigable week by week) ─────────────────────────────────
+const weekDays = computed(() => Array.from({ length: 7 }, (_, i) => dayjs().subtract(weekOffset.value * 7 + (6 - i), 'day')))
+const weekRangeLabel = computed(() => {
+  const range = `${weekDays.value[0].format('MMM D')} – ${weekDays.value[6].format('MMM D')}`
+  return weekOffset.value === 0 ? `${range} · this week` : range
+})
+const focusWeek = computed(() => weekDays.value.map((d) => {
   const key = d.format('YYYY-MM-DD')
-  const mins = Math.round(allSessions.value
-    .filter(s => dayjs(s.startTime).format('YYYY-MM-DD') === key)
-    .reduce((sum, s) => sum + (s.durationActual ?? s.durationPlanned ?? 0), 0) / 60)
-  return { label: d.format('dd'), value: mins }
+  const day = allSessions.value.filter(s => dayjs(s.startTime).format('YYYY-MM-DD') === key)
+  const mins = Math.round(day.reduce((sum, s) => sum + (s.durationActual ?? s.durationPlanned ?? 0), 0) / 60)
+  const parts = day.map(s => Math.round((s.durationActual ?? s.durationPlanned ?? 0) / 60) + 'm')
+  const title = day.length
+    ? `${d.format('ddd, MMM D')} · ${mins}m · ${day.length} session${day.length > 1 ? 's' : ''} (${parts.join(', ')})`
+    : `${d.format('ddd, MMM D')} · 0m`
+  return { label: d.format('dd'), value: mins, title }
 }))
-const completed7d = computed(() => last7().map((d) => {
+const completedWeek = computed(() => weekDays.value.map((d) => {
   const key = d.format('YYYY-MM-DD')
-  const n = taskStore.tasks.filter(t => t.status === 'completed' && t.completedAt && dayjs(t.completedAt).format('YYYY-MM-DD') === key).length
-  return { label: d.format('dd'), value: n }
+  const done = taskStore.tasks.filter(t => t.status === 'completed' && t.completedAt && dayjs(t.completedAt).format('YYYY-MM-DD') === key)
+  const names = done.map(t => t.title).slice(0, 6)
+  const title = done.length
+    ? `${d.format('ddd, MMM D')} · ${done.length} done (${names.join(', ')}${done.length > 6 ? '…' : ''})`
+    : `${d.format('ddd, MMM D')} · 0`
+  return { label: d.format('dd'), value: done.length, title }
 }))
 const statusData = computed(() => [
   { label: 'Pending', value: taskStore.pendingTasks.length, color: '#8e8b82' },

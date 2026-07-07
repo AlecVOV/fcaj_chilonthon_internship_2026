@@ -9,7 +9,7 @@
           v-for="(d, i) in data"
           :key="i"
           class="flex flex-1 flex-col items-center justify-end gap-1"
-          :title="`${d.label}: ${d.value}${unit}`"
+          :title="d.title || `${d.label}: ${d.value}${unit}`"
         >
           <span class="text-2xs leading-none tabular-nums text-ink-soft dark:text-on-dark-soft/70" :class="{ 'opacity-0': d.value === 0 }">{{ d.value }}</span>
           <div class="w-full max-w-[26px] rounded-t-[4px] transition-[height] duration-500" :style="{ height: barPx(d.value) + 'px', background: color }" />
@@ -25,7 +25,7 @@
 <script setup lang="ts">
 // Lightweight single-series vertical bar chart (CSS, no chart lib).
 const props = withDefaults(defineProps<{
-  data: { label: string; value: number }[]
+  data: { label: string; value: number; title?: string }[]
   color?: string
   unit?: string
   emptyText?: string
