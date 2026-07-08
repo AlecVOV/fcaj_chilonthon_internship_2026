@@ -27,6 +27,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+import uuid
 import boto3
 
 REGION = os.environ.get('AWS_REGION', 'ap-southeast-1')
@@ -94,8 +95,10 @@ def _verify_user(event):
         raise AuthError(401, 'Thiếu Authorization: Bearer token.')
     token = auth[7:].strip()
     sub = _sub(token)
-    if not sub:
-        raise AuthError(401, 'Token không hợp lệ (thiếu sub).')
+    try:
+        uuid.UUID(str(sub))  # sub phải là UUID trước khi ghép vào URL PostgREST (defense-in-depth)
+    except (ValueError, TypeError):
+        raise AuthError(401, 'Token không hợp lệ (sub sai).')
     url = f'{SUPABASE_URL}/rest/v1/users?id=eq.{sub}&select=id'
     req = urllib.request.Request(url, headers={
         'apikey': SUPABASE_ANON_KEY, 'Authorization': f'Bearer {token}', 'Accept': 'application/json'})
@@ -151,5 +154,11 @@ def handler(event, context):
         print(f'AUTH DENY {e.status}: {e.msg}')
         return _resp(e.status, {'message': e.msg}, event)
     except Exception as e:  # noqa: BLE001 — không rò rỉ chi tiết ra client
+        msg = str(e)
+        # Bedrock quota thấp -> throttling rất hay gặp; trả 429 rõ để UI báo "thử lại" thay vì "lỗi".
+        if any(k in msg for k in ('ThrottlingException', 'throttlingException', 'ThrottledException',
+                                  'TooManyRequests', 'serviceQuotaExceeded', 'ServiceQuotaExceeded')):
+            print(f'THROTTLED agent-bff: {msg}')
+            return _resp(429, {'message': 'Hệ thống AI đang quá tải (giới hạn tần suất). Vui lòng thử lại sau vài giây.'}, event)
         print(f'ERROR agent-bff: {e}')
         return _resp(500, {'message': 'Lỗi nội bộ, thử lại sau.'}, event)

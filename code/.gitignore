@@ -31,11 +31,17 @@ Thumbs.db
 *.wav
 *.m4a
 
-# ── AWS Lambda build artifacts / scratch ───────
-aws/lambdas/**/function.zip
-aws/lambdas/**/package/
-aws/lambdas/**/log.txt
+# ── AWS build artifacts / scratch (chứa secret trong log → KHÔNG commit) ──
+aws/**/function.zip
+aws/**/package/
+aws/**/log.txt
 
 # ── Python cache ───────────────────────────────
 __pycache__/
 *.pyc
+
+# ── Per-user / scratch (không thuộc project) ───
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+prompt để chạy lại.txt

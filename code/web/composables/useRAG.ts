@@ -3,7 +3,8 @@ export function useRAG() {
   async function getRecommendations(emotionLabel: string) {
     try {
       const config = useRuntimeConfig()
-      const apiUrl = config.public.apiGatewayUrl as string
+      // Biến RIÊNG (rỗng cho tới khi deploy rag-recommender) — tránh gọi /rag không tồn tại.
+      const apiUrl = config.public.ragApiUrl as string
       if (apiUrl) {
         const response = await $fetch<any[]>(`${apiUrl}/rag`, {
           method: 'POST', body: { emotion: emotionLabel, limit: 3 },

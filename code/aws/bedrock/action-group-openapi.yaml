@@ -81,6 +81,10 @@ paths:
                   minimum: 0
                   maximum: 3
                   description: "Priority 0=none, 1=low, 2=medium, 3=high"
+                dueDate:
+                  type: string
+                  format: date
+                  description: New due date in YYYY-MM-DD format
       responses:
         "200":
           description: Task updated successfully

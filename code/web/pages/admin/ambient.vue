@@ -22,7 +22,7 @@
 
       <div class="p-5 space-y-4">
         <div v-if="!apiConfigured" class="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning dark:text-warning">
-          ⚠️ Chưa cấu hình <code>NUXT_PUBLIC_API_GATEWAY_URL</code> + Lambda <code>ambient-audio-manager</code>.
+          ⚠️ Chưa cấu hình <code>NUXT_PUBLIC_AMBIENT_API_URL</code> (hoặc <code>NUXT_PUBLIC_API_GATEWAY_URL</code>) + Lambda <code>ambient-audio-manager</code>.
           Upload/list S3 will not work. See <code>aws/lambdas/ambient-audio-manager/README.md</code>.
           In the meantime, you can still manually paste S3 links in Section 2.
         </div>

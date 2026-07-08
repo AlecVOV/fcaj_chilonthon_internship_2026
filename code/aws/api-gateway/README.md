@@ -1,8 +1,16 @@
 # API Gateway — Setup
 
+> ⚠️ **Thực tế deploy KHÁC spec này ở phần AUTH.** HTTP API `ffepnb6gei` **KHÔNG dùng JWT
+> authorizer** — token Supabase ký **ES256** mà authorizer native chỉ hỗ trợ RS256. Auth làm
+> **TRONG từng Lambda** (Bearer → Supabase PostgREST verify + RLS; route admin tự check role).
+> Route AI (`/emotion`, `/rag`, `/report`, `/embed`) là **spec đích, CHƯA deploy** và path còn
+> lệch với frontend — sẽ chuẩn hoá khi viết các lambda đó. Route ĐANG chạy: `/agent/chat`,
+> `/ambient/upload-url`, `/ambient/files`.
+
 ## What this folder contains
 
-`openapi.yaml` — Full API Gateway spec with all 5 routes and JWT authorizer configuration.
+`openapi.yaml` — spec API Gateway (block `x-amazon-apigateway-authorizer` chỉ để tài liệu,
+KHÔNG áp dụng thực tế — xem cảnh báo trên).
 
 ## How to deploy
 

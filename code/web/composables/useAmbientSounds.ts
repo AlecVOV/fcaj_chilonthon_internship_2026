@@ -40,7 +40,7 @@ function rowToSound(r: any): AmbientSound {
 export function useAmbientSounds() {
   const { ambientApiUrl } = useConfig()
 
-  // Supabase JWT để qua authorizer của API Gateway (route AI/S3 đều yêu cầu JWT).
+  // Gửi Supabase access_token; Lambda tự validate qua PostgREST (API Gateway KHÔNG có authorizer).
   async function authHeaders(): Promise<Record<string, string>> {
     const sb = getSupabase()
     const { data: { session } } = await sb.auth.getSession()

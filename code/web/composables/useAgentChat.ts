@@ -91,10 +91,21 @@ export function useAgentChat() {
         tasks: response.tasks,
       })
     } catch (e: any) {
-      error.value = e?.message || 'Agent communication failed'
+      // Ưu tiên message thân thiện từ backend (agent-bff trả {message}); phân biệt 429 (quá tải).
+      const status = e?.statusCode ?? e?.response?.status
+      const backendMsg = e?.data?.message
+      let text: string
+      if (status === 429) {
+        text = backendMsg || 'Hệ thống AI đang quá tải, vui lòng thử lại sau vài giây.'
+      } else if (backendMsg) {
+        text = backendMsg
+      } else {
+        text = 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.'
+      }
+      error.value = backendMsg || e?.message || 'Agent communication failed'
       messages.value.push({
         role: 'agent',
-        text: 'Sorry, I encountered an error. Please try again.',
+        text,
         timestamp: new Date().toISOString(),
       })
     } finally {

@@ -9,7 +9,9 @@ export function useEmotionDetector() {
     detecting.value = true; error.value = null
     try {
       const config = useRuntimeConfig()
-      const apiUrl = config.public.apiGatewayUrl as string
+      // Dùng biến RIÊNG (rỗng cho tới khi deploy emotion-detector) — KHÔNG dùng apiGatewayUrl
+      // vì route /emotion không tồn tại trên API Gateway (sẽ rơi vào $default→ambient→401).
+      const apiUrl = config.public.emotionApiUrl as string
       if (apiUrl) {
         const response = await $fetch<{ label: string; confidence: number }>(
           `${apiUrl}/emotion`, { method: 'POST', body: { text } },

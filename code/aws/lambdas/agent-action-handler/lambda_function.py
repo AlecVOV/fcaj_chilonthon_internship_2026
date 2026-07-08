@@ -20,14 +20,20 @@ event['requestBody']['content']['application/json']['properties'] (list {name,va
 import json
 import os
 import uuid
+from datetime import datetime
 from supabase import create_client
 
 supabase = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'])
 
-ALLOWED_WRITE = {'title', 'description', 'status', 'priority', 'due_date'}
+# Field ghi được từ model. dueDate (camelCase, từ OpenAPI) xử lý riêng -> cột due_date.
+ALLOWED_WRITE = {'title', 'description', 'status', 'priority'}
 VALID_STATUS = {'pending', 'in_progress', 'completed', 'cancelled'}
 MAX_TITLE = 200
 MAX_DESC = 2000
+
+
+class BadInput(Exception):
+    """Input sai (vd dueDate lỗi định dạng) -> trả 400 thay vì 500."""
 
 
 def _params(event):
@@ -62,6 +68,15 @@ def _clean_writes(params):
             w.pop('priority')
     if 'status' in w and w['status'] not in VALID_STATUS:
         w.pop('status')
+    # dueDate (camelCase từ schema) -> due_date (cột DB DATE). Validate YYYY-MM-DD thật,
+    # nếu không Postgres sẽ ném lỗi -> 500 khó hiểu. Sai định dạng -> BadInput (400).
+    dd = params.get('dueDate')
+    if dd not in (None, ''):
+        try:
+            datetime.strptime(str(dd), '%Y-%m-%d')
+        except ValueError:
+            raise BadInput('dueDate phải dạng YYYY-MM-DD.')
+        w['due_date'] = str(dd)
     return w
 
 
@@ -83,6 +98,8 @@ def handler(event, context):
         if api_path == '/delete-task' and http_method == 'DELETE':
             return _delete(event, user_id, params)
         return _response(event, 400, f'Unknown action {http_method} {api_path}')
+    except BadInput as bi:
+        return _response(event, 400, str(bi))
     except Exception as e:  # noqa: BLE001
         print(f'ERROR action-handler: {e}')
         return _response(event, 500, 'Lỗi nội bộ khi thao tác task.')
@@ -99,7 +116,7 @@ def _create(event, user_id, params):
         'status': 'pending',
         'description': w.get('description', ''),
         'priority': w.get('priority', 0),
-        'due_date': params.get('dueDate') or None,
+        'due_date': w.get('due_date'),
     }
     supabase.table('tasks').insert(data).execute()
     return _response(event, 200, f'Đã tạo task: {title}')

@@ -128,9 +128,8 @@ def _token_claim(token, seg_idx, key, default=None):
 
 
 def _require_admin_via_supabase(token):
-    """Để PostgREST verify token (mọi thuật toán). RLS: user thường chỉ đọc dòng
-    của mình; ADMIN đọc được TẤT CẢ dòng → phải khớp ĐÚNG dòng caller theo sub,
-    KHÔNG dùng rows[0]."""
+    """Để PostgREST verify token (mọi thuật toán). Query lọc id=eq.{sub} nên chỉ trả
+    ĐÚNG 1 dòng của caller (kể cả admin — dù admin đọc được cả bảng) → rows[0] là an toàn."""
     sub = _token_claim(token, 1, 'sub')
     if not sub:
         raise AuthError(401, 'Token thiếu sub.')
@@ -217,5 +216,6 @@ def handler(event, context):
 
         return _resp(404, {'message': f'Không khớp route: {method} {path}'})
 
-    except Exception as e:  # noqa: BLE001 — trả lỗi gọn cho client
-        return _resp(500, {'message': str(e)})
+    except Exception as e:  # noqa: BLE001 — log chi tiết server-side, trả message chung
+        print(f'ERROR ambient: {e}')
+        return _resp(500, {'message': 'Lỗi nội bộ, thử lại sau.'})

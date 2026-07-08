@@ -15,6 +15,9 @@ export default defineNuxtConfig({
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || '',
       apiGatewayUrl: process.env.NUXT_PUBLIC_API_GATEWAY_URL || '',
       ambientApiUrl: process.env.NUXT_PUBLIC_AMBIENT_API_URL || '',
+      // Emotion/RAG chưa deploy: để rỗng -> composable dùng fallback client. Set khi deploy lambda tương ứng.
+      emotionApiUrl: process.env.NUXT_PUBLIC_EMOTION_API_URL || '',
+      ragApiUrl: process.env.NUXT_PUBLIC_RAG_API_URL || '',
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
     },
   },

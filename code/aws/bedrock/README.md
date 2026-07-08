@@ -19,7 +19,7 @@
 ### 1. Create Agent
 1. Bedrock Console → Agents → Create Agent
 2. Agent Name: `task-manager-agent`
-3. Foundation Model: `Claude 3 Haiku` (fast, cost-effective)
+3. Foundation Model: **`apac.anthropic.claude-3-5-sonnet-20241022-v2:0`** (Sonnet 3.5 V2 apac inference profile — nguồn chuẩn là `DEPLOY-cmd.md`; Haiku 3 account chưa có access, Haiku 4.5 global bị chặn cho Agent)
 4. Agent Instructions:
 ```
 You are a task management assistant. When a user describes what they need to do:
