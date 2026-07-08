@@ -8,6 +8,7 @@ paths:
   /create-task:
     post:
       summary: Create a new task
+      description: Create a new to-do task for the current authenticated user. Use this when the user wants to add or create a task.
       operationId: createTask
       requestBody:
         required: true
@@ -31,22 +32,34 @@ paths:
                   type: integer
                   minimum: 0
                   maximum: 3
-                  description: "0=none, 1=low, 2=medium, 3=high"
+                  description: "Priority 0=none, 1=low, 2=medium, 3=high"
       responses:
-        '200':
+        "200":
           description: Task created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Human-readable result message
+                  status:
+                    type: string
+                    description: "success or error"
 
   /update-task:
     put:
       summary: Update an existing task
+      description: Update fields of an existing task owned by the current user. Use this when the user wants to change a task's title, description, status, or priority.
       operationId: updateTask
       parameters:
         - name: taskId
           in: query
           required: true
+          description: UUID of the task to update
           schema:
             type: string
-            description: UUID of the task to update
       requestBody:
         content:
           application/json:
@@ -55,30 +68,57 @@ paths:
               properties:
                 title:
                   type: string
+                  description: New task title
                 description:
                   type: string
+                  description: New task description
                 status:
                   type: string
                   enum: [pending, in_progress, completed, cancelled]
+                  description: New task status
                 priority:
                   type: integer
                   minimum: 0
                   maximum: 3
+                  description: "Priority 0=none, 1=low, 2=medium, 3=high"
       responses:
-        '200':
+        "200":
           description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Human-readable result message
+                  status:
+                    type: string
+                    description: "success or error"
 
   /delete-task:
     delete:
       summary: Delete a task
+      description: Delete a task owned by the current user. Use this only when the user explicitly wants to remove or delete a task.
       operationId: deleteTask
       parameters:
         - name: taskId
           in: query
           required: true
+          description: UUID of the task to delete
           schema:
             type: string
-            description: UUID of the task to delete
       responses:
-        '200':
+        "200":
           description: Task deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Human-readable result message
+                  status:
+                    type: string
+                    description: "success or error"

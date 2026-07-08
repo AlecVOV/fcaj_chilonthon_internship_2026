@@ -239,3 +239,5 @@ Kiểm DB: task tạo ra phải có `user_id` = user đang đăng nhập, KHÔNG
 | ImportError pydantic_core khi action-handler chạy | Đóng gói SAI wheel (Windows). Chạy lại **Bước 3b** (pip `--platform manylinux2014_x86_64` → re-zip → `update-function-code`). |
 | `tar` không nhận diện / lỗi zip | Win cũ chưa có `tar`. Dùng `powershell -Command "Compress-Archive -Path package\* -DestinationPath function.zip -Force"`. |
 | `%{http_code}` in ra sai trong cmd | `%` là ký tự đặc biệt của cmd. Dùng `curl -i` xem dòng `HTTP/.. <code>` thay vì `-w "%{http_code}"`. |
+| Bước 6: `Failed to create OpenAPI 3 model ... 'description' is missing` | Bedrock BẮT BUỘC `description` ở **mỗi operation** (không chỉ `summary`) và ở **cấp parameter** (không phải trong `schema`). `action-group-openapi.yaml` đã sửa đủ. Xem chi tiết lỗi: thêm `--cli-error-format json` vào lệnh. |
+| Agent instructions hiện `ΓÇö` (mojibake) | File `agent-instructions.txt` có ký tự non-ASCII (dấu `—`) → CLI Windows đọc `file://` bằng cp1252 hỏng. Đã đổi sang ASCII. Muốn sạch agent đã tạo: `aws bedrock-agent update-agent ...` với instruction mới rồi `prepare-agent` lại. |
