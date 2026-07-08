@@ -107,7 +107,7 @@ aws bedrock create-guardrail-version --region %REGION% --guardrail-identifier <g
 ```bat
 aws bedrock-agent create-agent --region %REGION% --agent-name task-manager-agent ^
   --agent-resource-role-arn arn:aws:iam::%ACCOUNT%:role/AmazonBedrockExecutionRoleForAgents_task ^
-  --foundation-model apac.anthropic.claude-3-5-sonnet-20240620-v1:0 ^
+  --foundation-model apac.anthropic.claude-3-5-sonnet-20241022-v2:0 ^
   --instruction "file://bedrock/agent-instructions.txt" ^
   --guardrail-configuration "guardrailIdentifier=<guardrailId>,guardrailVersion=1" ^
   --idle-session-ttl-in-seconds 600
