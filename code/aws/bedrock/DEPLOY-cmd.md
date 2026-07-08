@@ -107,7 +107,7 @@ aws bedrock create-guardrail-version --region %REGION% --guardrail-identifier <g
 ```bat
 aws bedrock-agent create-agent --region %REGION% --agent-name task-manager-agent ^
   --agent-resource-role-arn arn:aws:iam::%ACCOUNT%:role/AmazonBedrockExecutionRoleForAgents_task ^
-  --foundation-model anthropic.claude-3-5-sonnet-20240620-v1:0 ^
+  --foundation-model apac.anthropic.claude-3-5-sonnet-20240620-v1:0 ^
   --instruction "file://bedrock/agent-instructions.txt" ^
   --guardrail-configuration "guardrailIdentifier=<guardrailId>,guardrailVersion=1" ^
   --idle-session-ttl-in-seconds 600
@@ -241,7 +241,7 @@ Kiểm DB: task tạo ra phải có `user_id` = user đang đăng nhập, KHÔNG
 | Agent trả lời nhưng KHÔNG tạo task | action-handler chưa gắn (Bước 6) / thiếu resource policy (Bước 7); hoặc requestBody không tới (đã fix `_params`). Xem CloudWatch `/aws/lambda/agent-action-handler`. |
 | `/agent/chat` **500** + log `accessDeniedException ... InvokeAgent` (fail NGAY, không có trace model) | **Model access CHƯA có** (dù greeting đôi khi chạy được lúc access đang pending). Test invoke-model (Bước 0). Nếu `Model access is denied ... AWS Marketplace` → bật access ở Console, HOẶC đổi `--foundation-model` sang model account CÓ access (vd `anthropic.claude-3-5-sonnet-20240620-v1:0`) bằng `update-agent` → `prepare-agent` → `update-agent-alias`. |
 | Agent gọi action-group bị `accessDenied` (đọc schema S3) | Agent service role thiếu `s3:GetObject` trên bucket chứa schema. Đã thêm sẵn trong `agent-permissions-policy.json` (Sid `ReadActionGroupSchemaFromS3`) → `put-role-policy` lại nếu role tạo trước bản vá. |
-| `throttlingException` khi test dồn | Gọi agent quá nhanh — chờ ~30–60s rồi thử lại (không phải lỗi cấu hình). |
+| `throttlingException` ("request rate too high") | On-demand model 1-region quota thấp. **Fix: dùng inference profile cross-region** (`apac.anthropic.*` / `global.anthropic.*`) làm `--foundation-model` (throughput cao hơn) — runbook đã dùng `apac.anthropic.claude-3-5-sonnet-20240620-v1:0`. Vẫn throttle → chờ vài giây giữa tin nhắn, hoặc xin **quota increase** (Service Quotas → Bedrock InvokeModel). Nhớ agent role có `inference-profile/*` (đã có). |
 | `create-agent-alias` lỗi | Chưa `prepare-agent` (Bước 8) hoặc agent chưa PREPARED. |
 | ImportError pydantic_core khi action-handler chạy | Đóng gói SAI wheel (Windows). Chạy lại **Bước 3b** (pip `--platform manylinux2014_x86_64` → re-zip → `update-function-code`). |
 | `tar` không nhận diện / lỗi zip | Win cũ chưa có `tar`. Dùng `powershell -Command "Compress-Archive -Path package\* -DestinationPath function.zip -Force"`. |
