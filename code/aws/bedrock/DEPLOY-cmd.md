@@ -18,13 +18,18 @@ API Gateway chỉ RS256 nên KHÔNG dùng): **agent-bff tự verify token trong 
 
 ## Bước 0 — Bật model access (một lần)
 
-Bedrock Console (ap-southeast-1) → **Model access** → Manage → bật **Anthropic Claude**
-(khuyến nghị Claude 3 Haiku — rẻ/nhanh cho tác vụ tạo task). Chờ Access = *Granted*.
+Bedrock Console (ap-southeast-1) → **Model access** → Manage → bật **Anthropic Claude**.
+Chờ Access = *Granted* (có thể mất vài phút — subscription marketplace).
 
-> Lấy model id để dùng ở Bước 5. Ví dụ `anthropic.claude-3-haiku-20240307-v1:0`.
-> ⚠️ Một số model mới bắt buộc gọi qua **inference profile** (vd `apac.anthropic.claude-...`);
-> nếu tạo agent báo lỗi model, dùng ARN inference profile thay cho model id trần.
-> Kiểm model có trong region: `aws bedrock list-foundation-models --region %REGION% --by-provider anthropic --query "modelSummaries[].modelId"`
+> ⚠️ **BẮT BUỘC kiểm model THỰC SỰ gọi được TRƯỚC khi tạo agent** — access "Granted" trên
+> Console chưa chắc đã dùng được ngay. Test bằng invoke-model (cmd):
+> ```bat
+> aws bedrock-runtime invoke-model --model-id anthropic.claude-3-5-sonnet-20240620-v1:0 --body "{\"anthropic_version\":\"bedrock-2023-05-31\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" --region ap-southeast-1 --cli-binary-format raw-in-base64-out out.json
+> ```
+> Ra file `out.json` có nội dung = OK. Nếu lỗi `Model access is denied ... AWS Marketplace` =
+> model đó CHƯA có access → bật ở Console hoặc chọn model khác.
+> **Thực tế account này (2026-07-08):** Haiku 3 **CHƯA** có access; **Sonnet 3.5** (`anthropic.claude-3-5-sonnet-20240620-v1:0`) và **Haiku 4.5** (`global.anthropic.claude-haiku-4-5-20251001-v1:0`) thì CÓ → runbook dùng **Sonnet 3.5**.
+> Một số model cần gọi qua **inference profile** (`apac.anthropic.*` / `global.anthropic.*`); nếu model-id trần lỗi thì dùng profile id.
 
 ## Bước 1 — Secrets Manager cho service_role key (khuyến nghị)
 
@@ -102,7 +107,7 @@ aws bedrock create-guardrail-version --region %REGION% --guardrail-identifier <g
 ```bat
 aws bedrock-agent create-agent --region %REGION% --agent-name task-manager-agent ^
   --agent-resource-role-arn arn:aws:iam::%ACCOUNT%:role/AmazonBedrockExecutionRoleForAgents_task ^
-  --foundation-model anthropic.claude-3-haiku-20240307-v1:0 ^
+  --foundation-model anthropic.claude-3-5-sonnet-20240620-v1:0 ^
   --instruction "file://bedrock/agent-instructions.txt" ^
   --guardrail-configuration "guardrailIdentifier=<guardrailId>,guardrailVersion=1" ^
   --idle-session-ttl-in-seconds 600
@@ -234,7 +239,9 @@ Kiểm DB: task tạo ra phải có `user_id` = user đang đăng nhập, KHÔNG
 | `/agent/chat` 401 | Không gửi Bearer, hoặc gửi UUID thay vì access_token (đã fix useAgentChat), hoặc token hết hạn. |
 | 503 "Bedrock Agent chưa cấu hình" | agent-bff thiếu env `BEDROCK_AGENT_ID`/`ALIAS_ID` (Bước 9). |
 | Agent trả lời nhưng KHÔNG tạo task | action-handler chưa gắn (Bước 6) / thiếu resource policy (Bước 7); hoặc requestBody không tới (đã fix `_params`). Xem CloudWatch `/aws/lambda/agent-action-handler`. |
-| `AccessDeniedException` InvokeModel | Chưa bật model access (Bước 0) hoặc agent role thiếu quyền / sai region model. |
+| `/agent/chat` **500** + log `accessDeniedException ... InvokeAgent` (fail NGAY, không có trace model) | **Model access CHƯA có** (dù greeting đôi khi chạy được lúc access đang pending). Test invoke-model (Bước 0). Nếu `Model access is denied ... AWS Marketplace` → bật access ở Console, HOẶC đổi `--foundation-model` sang model account CÓ access (vd `anthropic.claude-3-5-sonnet-20240620-v1:0`) bằng `update-agent` → `prepare-agent` → `update-agent-alias`. |
+| Agent gọi action-group bị `accessDenied` (đọc schema S3) | Agent service role thiếu `s3:GetObject` trên bucket chứa schema. Đã thêm sẵn trong `agent-permissions-policy.json` (Sid `ReadActionGroupSchemaFromS3`) → `put-role-policy` lại nếu role tạo trước bản vá. |
+| `throttlingException` khi test dồn | Gọi agent quá nhanh — chờ ~30–60s rồi thử lại (không phải lỗi cấu hình). |
 | `create-agent-alias` lỗi | Chưa `prepare-agent` (Bước 8) hoặc agent chưa PREPARED. |
 | ImportError pydantic_core khi action-handler chạy | Đóng gói SAI wheel (Windows). Chạy lại **Bước 3b** (pip `--platform manylinux2014_x86_64` → re-zip → `update-function-code`). |
 | `tar` không nhận diện / lỗi zip | Win cũ chưa có `tar`. Dùng `powershell -Command "Compress-Archive -Path package\* -DestinationPath function.zip -Force"`. |

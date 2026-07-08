@@ -20,6 +20,14 @@
         "bedrock:ApplyGuardrail"
       ],
       "Resource": "arn:aws:bedrock:ap-southeast-1:677276113002:guardrail/*"
+    },
+    {
+      "Sid": "ReadActionGroupSchemaFromS3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:aws:s3:::focus-mode-ambient-audio/schemas/*"
     }
   ]
 }
