@@ -10,7 +10,7 @@
 Lambda **agent-action-handler** → Supabase `tasks`.
 
 **IDs đã deploy:** agent `KKJCF9RAKJ` · alias `prod` `K8YDCGJRW4` · guardrail `9l9zw1sh1tei` v1 ·
-action group `80WEPXLIJ8` · model `apac.anthropic.claude-3-5-sonnet-20241022-v2:0`.
+action group `80WEPXLIJ8` · model `global.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku 4.5, 50 RPM).
 
 ---
 
@@ -34,19 +34,24 @@ agent multi-turn gọi model **2–3 lần trong vài giây** → vượt quota 
 |---|---|
 | Sonnet 3.5 on-demand | 1 |
 | Sonnet 3.5 v1 (apac profile) | 2 |
-| **Sonnet 3.5 V2 (apac profile) ← đang dùng** | **5** |
+| Sonnet 3.5 V2 (apac profile) | 5 |
+| **Haiku 4.5 (global profile) ← đang dùng** | **50** |
 
 RPM cao hơn nhưng KHÔNG dùng được: **Haiku 4.5 global (50 RPM)** — bị account chặn cho **Bedrock Agent**
 (`AccessDenied ... using InferenceProfile global.*` dù đã cấp policy InvokeModel `Resource:"*"` → nghi
 account-level/SCP chặn global profile cho agent); **Claude 3 Haiku (20 RPM), 3.7 Sonnet (13), Sonnet 4 (10)**
 — account **chưa có model access**.
 
-**Cách sửa:**
-1. **Đã làm:** đổi agent sang **Sonnet 3.5 V2 apac (5 RPM)** — RPM cao nhất trong các model có access.
-   (Dùng inference profile cross-region thay on-demand 1-region để tăng throughput.)
-2. **Triệt để:** xin **quota increase** — Console → Service Quotas → Amazon Bedrock (ap-southeast-1) →
-   *"Cross-region model inference requests per minute for Anthropic Claude 3.5 Sonnet V2"* → Request increase.
-3. **Cho demo:** ưu tiên **one-shot** (nhập đủ chi tiết 1 tin); multi-turn thì giãn ~15-30s giữa tin.
+**Cách sửa (ĐÃ GIẢI QUYẾT):**
+1. **Đổi agent sang Claude Haiku 4.5** (`global.anthropic.claude-haiku-4-5-20251001-v1:0`, global
+   cross-region profile) — quota **50 RPM** (gấp 10× Sonnet 3.5 V2 apac=5). Hết throttling multi-turn,
+   rẻ/nhanh hơn. (Đã thử tuần tự: Sonnet 3.5 v1 apac=2 RPM → V2 apac=5 RPM → Haiku 4.5 global=50 RPM.)
+2. **⚠️ Bẫy khi dùng GLOBAL profile cho Agent:** agent service role phải có **`bedrock:GetInferenceProfile`**
+   (+ `GetFoundationModel`), KHÔNG chỉ `bedrock:InvokeModel`. Thiếu Get* → `UpdateAgent` báo
+   `AccessDenied ... using InferenceProfile global.*` (dù InvokeModel đã `Resource:"*"`). Đây là lý do
+   ban đầu tưởng "global bị account chặn" — thực ra chỉ thiếu quyền Get*.
+3. **Nếu cần hơn 50 RPM:** Service Quotas → Bedrock → *"Global cross-region ... Claude Haiku 4.5 requests
+   per minute"* → Request increase.
 
 ---
 

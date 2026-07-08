@@ -28,6 +28,15 @@
         "s3:GetObject"
       ],
       "Resource": "arn:aws:s3:::focus-mode-ambient-audio/schemas/*"
+    },
+    {
+      "Sid": "ReadInferenceProfile",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:GetInferenceProfile",
+        "bedrock:GetFoundationModel"
+      ],
+      "Resource": "*"
     }
   ]
 }

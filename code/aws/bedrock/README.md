@@ -19,7 +19,7 @@
 ### 1. Create Agent
 1. Bedrock Console → Agents → Create Agent
 2. Agent Name: `task-manager-agent`
-3. Foundation Model: **`apac.anthropic.claude-3-5-sonnet-20241022-v2:0`** (Sonnet 3.5 V2 apac inference profile — nguồn chuẩn là `DEPLOY-cmd.md`; Haiku 3 account chưa có access, Haiku 4.5 global bị chặn cho Agent)
+3. Foundation Model: **`global.anthropic.claude-haiku-4-5-20251001-v1:0`** (Haiku 4.5, global cross-region profile, 50 RPM — nguồn chuẩn `DEPLOY-cmd.md`). Cần agent role có `bedrock:GetInferenceProfile` để dùng global profile.
 4. Agent Instructions:
 ```
 You are a task management assistant. When a user describes what they need to do:
