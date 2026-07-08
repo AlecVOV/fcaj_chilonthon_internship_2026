@@ -13,6 +13,7 @@ Lambda functions, API Gateway config, Bedrock Agent setup, and IAM policies.
 | `bedrock/` | Bedrock Agent: OpenAPI action schema + **`DEPLOY-cmd.md` (runbook end-to-end)** + Guardrail + hardened instructions |
 | `iam/` | Lambda execution role + resource-based policies |
 | `s3/` | Bucket policy + CORS cho `focus-mode-ambient-audio` (+ MP3 nguồn, gitignore) |
+| **`UPDATE-guide.md`** | **Cập nhật hệ thống SAU deploy: đổi gì → chạy lệnh gì → check gì. Đọc khi sửa code/config/agent.** |
 
 > **Pattern auth chung (đã chứng minh chạy):** access_token Supabase ký **ES256** nên KHÔNG
 > dùng JWT authorizer ở API Gateway. Mỗi Lambda tự lấy `Authorization: Bearer <token>`, gọi
