@@ -1,2 +1,2 @@
-supabase>=2.0.0
-psycopg2-binary>=2.9.0
+# supabase-py gọi Supabase qua PostgREST (HTTP) — KHÔNG cần psycopg2.
+supabase>=2.4.0

@@ -1,9 +1,18 @@
 # Bedrock Agent — Setup
 
+> ⚠️ **Runbook chuẩn (end-to-end, đã kèm bảo mật + chống prompt injection): [`DEPLOY-cmd.md`](DEPLOY-cmd.md).**
+> File README này là phác thảo ban đầu, THIẾU nhiều bước bắt buộc (model access, agent service
+> role, prepare-agent, Guardrail, resource policy scope đúng, route API Gateway). Làm theo
+> `DEPLOY-cmd.md`. Đặc biệt: token Supabase ký **ES256** nên KHÔNG dùng JWT authorizer ở API
+> Gateway — agent-bff tự verify token trong Lambda (như ambient-audio-manager).
+
 ## What this folder contains
 
-`action-group-openapi.yaml` — OpenAPI schema for the Bedrock Agent Action Group.
-Defines the 3 operations the agent can invoke: create-task, update-task, delete-task.
+- `action-group-openapi.yaml` — OpenAPI schema cho Action Group (create/update/delete-task).
+- `DEPLOY-cmd.md` — runbook deploy đầy đủ (Windows cmd) + ma trận bảo mật + test injection.
+- `agent-instructions.txt` — instructions đã hardened chống prompt injection (dán vào agent).
+- `guardrail-config.json` — cấu hình Guardrail (Prompt Attack HIGH + denied topics + PII).
+- `agent-trust-policy.json` / `agent-permissions-policy.json` — IAM cho Bedrock Agent service role.
 
 ## Setup in AWS Console
 

@@ -14,6 +14,7 @@
 
 import { useAuth } from '~/composables/useAuth'
 import { useConfig } from '~/composables/useConfig'
+import { getSupabase } from '~/lib/supabaseClient'
 
 export interface ChatMessage {
   role: 'user' | 'agent'
@@ -57,6 +58,11 @@ export function useAgentChat() {
       if (!apiGatewayUrl.value) {
         throw new Error('AI agent backend is not configured (API Gateway URL missing).')
       }
+      // Supabase access_token thật (ES256) — backend agent-bff verify token này rồi
+      // tự lấy userId từ đó. KHÔNG gửi userId trong body (client không tự khai identity).
+      const { data: { session } } = await getSupabase().auth.getSession()
+      if (!session?.access_token) throw new Error('Phiên đăng nhập đã hết hạn — đăng nhập lại.')
+
       // Call the real Bedrock Agent via API Gateway.
       const response = await $fetch<{
         responseText: string
@@ -67,11 +73,10 @@ export function useAgentChat() {
         method: 'POST',
         body: {
           sessionId: sessionId.value,
-          userId: currentUser.value?.id,
           inputText,
         },
         headers: {
-          Authorization: `Bearer ${currentUser.value?.id}`, // JWT from auth
+          Authorization: `Bearer ${session.access_token}`,
         },
       })
 

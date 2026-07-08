@@ -1,1 +1,3 @@
+# agent-bff chỉ dùng stdlib (urllib/base64/json) + boto3 (có sẵn trong Lambda runtime).
+# Không cần đóng gói gì; liệt kê boto3 chỉ để chạy/test dưới local.
 boto3>=1.34.0

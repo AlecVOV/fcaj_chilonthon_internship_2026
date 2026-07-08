@@ -4,8 +4,16 @@ info:
   version: "1.0"
   description: |
     Routes frontend requests to Lambda functions.
-    All routes require JWT authentication (Supabase Auth).
-    Admin routes additionally require admin role.
+
+    ⚠️ AUTH — QUAN TRỌNG: access_token Supabase của project này ký ES256 (asymmetric
+    signing keys). JWT authorizer NATIVE của HTTP API chỉ hỗ trợ RS256 → KHÔNG verify
+    được token ES256. Vì vậy block x-amazon-apigateway-authorizer bên dưới KHÔNG được
+    dùng cho deploy thật; auth được thực hiện TRONG từng Lambda (lấy Bearer token, gọi
+    Supabase PostgREST verify + RLS) — pattern đã chạy thật ở ambient-audio-manager và
+    agent-bff. Với route admin (/admin/vectorize) thì Lambda tự check role='admin'.
+
+    Trạng thái deploy: chỉ 2 route /ambient/* đang chạy (HTTP API ffepnb6gei, route
+    $default -> ambient-audio-manager, KHÔNG authorizer). Các route còn lại là spec đích.
 
 servers:
   - url: https://${API_ID}.execute-api.ap-southeast-1.amazonaws.com/prod

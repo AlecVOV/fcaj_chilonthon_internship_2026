@@ -38,7 +38,7 @@
       "Action": [
         "bedrock:InvokeAgent"
       ],
-      "Resource": "arn:aws:bedrock:*:*:agent/*"
+      "Resource": "arn:aws:bedrock:ap-southeast-1:677276113002:agent-alias/*"
     },
     {
       "Effect": "Allow",
@@ -46,13 +46,6 @@
         "secretsmanager:GetSecretValue"
       ],
       "Resource": "arn:aws:secretsmanager:*:*:secret:focus-mode/*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "lambda:InvokeFunction"
-      ],
-      "Resource": "arn:aws:lambda:*:*:function:focus-*"
     }
   ]
 }

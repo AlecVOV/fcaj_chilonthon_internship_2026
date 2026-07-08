@@ -125,7 +125,7 @@
         <mxCell id="RipHBTtegJj2c-1iK_Wo-57" edge="1" parent="RipHBTtegJj2c-1iK_Wo-32" source="RipHBTtegJj2c-1iK_Wo-29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="RipHBTtegJj2c-1iK_Wo-56">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="RipHBTtegJj2c-1iK_Wo-29" parent="RipHBTtegJj2c-1iK_Wo-32" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock_agentcore;" value="AgentCore" vertex="1">
+        <mxCell id="RipHBTtegJj2c-1iK_Wo-29" parent="RipHBTtegJj2c-1iK_Wo-32" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock_agentcore;" value="Bedrock Agent" vertex="1">
           <mxGeometry height="48" width="48" x="40" y="50" as="geometry" />
         </mxCell>
         <mxCell id="RipHBTtegJj2c-1iK_Wo-56" parent="RipHBTtegJj2c-1iK_Wo-32" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock;" value="Bedrock Model" vertex="1">
@@ -146,25 +146,25 @@
         <mxCell id="RipHBTtegJj2c-1iK_Wo-62" parent="1" style="rounded=1;whiteSpace=wrap;arcSize=50;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="User / Client App" vertex="1">
           <mxGeometry height="39" width="148" x="2642" y="189" as="geometry" />
         </mxCell>
-        <mxCell id="RipHBTtegJj2c-1iK_Wo-63" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Amazon Cognito or Existing IdP&#xa;Authenticate user / issue JWT" vertex="1">
+        <mxCell id="RipHBTtegJj2c-1iK_Wo-63" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Supabase Auth (GoTrue)&#xa;Issues ES256 access_token (JWT)" vertex="1">
           <mxGeometry height="126" width="260" x="2642" y="326" as="geometry" />
         </mxCell>
         <mxCell id="RipHBTtegJj2c-1iK_Wo-64" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="AWS WAF - optional&#xa;Basic edge protection" vertex="1">
           <mxGeometry height="78" width="215" x="2376" y="350" as="geometry" />
         </mxCell>
-        <mxCell id="RipHBTtegJj2c-1iK_Wo-65" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Amazon API Gateway&#xa;Auth, throttling, request lifecycle,&#xa;optional response streaming" vertex="1">
+        <mxCell id="RipHBTtegJj2c-1iK_Wo-65" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Amazon API Gateway (HTTP API)&#xa;NO JWT authorizer (token is ES256)&#xa;Throttling / WAF recommended" vertex="1">
           <mxGeometry height="150" width="260" x="2525" y="526" as="geometry" />
         </mxCell>
-        <mxCell id="RipHBTtegJj2c-1iK_Wo-66" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="AWS Lambda - App Backend / BFF&#xa;Validate request&#xa;Map user → sessionId&#xa;Call Bedrock InvokeAgent" vertex="1">
+        <mxCell id="RipHBTtegJj2c-1iK_Wo-66" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="AWS Lambda - BFF (agent-bff)&#xa;Verify Supabase token IN-LAMBDA (ES256)&#xa;Set sessionAttributes.userId&#xa;sessionId namespaced per user&#xa;Call Bedrock InvokeAgent" vertex="1">
           <mxGeometry height="150" width="260" x="2585" y="774" as="geometry" />
         </mxCell>
         <mxCell id="RipHBTtegJj2c-1iK_Wo-67" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Agent Alias&#xa;prod / staging stable endpoint" vertex="1">
           <mxGeometry height="102" width="260" x="2197" y="1083" as="geometry" />
         </mxCell>
-        <mxCell id="RipHBTtegJj2c-1iK_Wo-68" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Task Manager Agent&#xa;Instructions + prompt templates" vertex="1">
+        <mxCell id="RipHBTtegJj2c-1iK_Wo-68" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Task Manager Agent&#xa;Hardened instructions&#xa;(treat user content as DATA)" vertex="1">
           <mxGeometry height="102" width="260" x="2506" y="1296" as="geometry" />
         </mxCell>
-        <mxCell id="RipHBTtegJj2c-1iK_Wo-69" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Amazon Bedrock Guardrails&#xa;Input/output safety&#xa;PII / prompt-attack policies" vertex="1">
+        <mxCell id="RipHBTtegJj2c-1iK_Wo-69" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Amazon Bedrock Guardrails&#xa;Prompt Attack = HIGH&#xa;Denied topics: priv-esc / other users /&#xa;prompt exfil + PII block" vertex="1">
           <mxGeometry height="102" width="259" x="2507" y="1083" as="geometry" />
         </mxCell>
         <mxCell id="RipHBTtegJj2c-1iK_Wo-70" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="Session State / Session Attributes&#xa;Conversation history&#xa;Draft task object" vertex="1">
@@ -188,7 +188,7 @@
         <mxCell id="RipHBTtegJj2c-1iK_Wo-76" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="OpenAPI Schema&#xa;Defines operations + required parameters&#xa;Example: POST /create-final-task" vertex="1">
           <mxGeometry height="150" width="260" x="3918" y="1272" as="geometry" />
         </mxCell>
-        <mxCell id="RipHBTtegJj2c-1iK_Wo-77" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="AWS Lambda - Action Handler&#xa;Business logic for create/update task" vertex="1">
+        <mxCell id="RipHBTtegJj2c-1iK_Wo-77" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="AWS Lambda - Action Handler&#xa;user_id from sessionAttributes (fail-closed)&#xa;Whitelist fields (no mass-assign)&#xa;Always .eq(user_id)" vertex="1">
           <mxGeometry height="126" width="260" x="3931" y="1920" as="geometry" />
         </mxCell>
         <mxCell id="RipHBTtegJj2c-1iK_Wo-78" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);" value="IAM Service Role for Bedrock Agent&#xa;Access FM, schema in S3, KB, Guardrails" vertex="1">
@@ -236,7 +236,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="RipHBTtegJj2c-1iK_Wo-89" edge="1" parent="1" source="RipHBTtegJj2c-1iK_Wo-63" style="curved=1;dashed=1;dashPattern=2 3;startArrow=none;endArrow=block;exitX=0.5;exitY=1;entryX=0.8;entryY=0;rounded=0;" target="RipHBTtegJj2c-1iK_Wo-65" value="JWT validation / authorizer">
+        <mxCell id="RipHBTtegJj2c-1iK_Wo-89" edge="1" parent="1" source="RipHBTtegJj2c-1iK_Wo-63" style="curved=1;dashed=1;dashPattern=2 3;startArrow=none;endArrow=block;exitX=0.5;exitY=1;entryX=0.8;entryY=0;rounded=0;" target="RipHBTtegJj2c-1iK_Wo-65" value="Auth in BFF Lambda (Supabase validate ES256), NOT at gateway">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="2772" y="489" />

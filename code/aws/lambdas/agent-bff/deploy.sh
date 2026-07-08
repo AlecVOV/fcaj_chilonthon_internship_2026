@@ -1,8 +1,9 @@
 #!/bin/bash
+# Deploy agent-bff. Chỉ dùng stdlib + boto3 (đã có sẵn trong runtime) -> chỉ cần zip .py.
+set -e
 FUNCTION_NAME=${1:-agent-bff}
-pip install -r requirements.txt -t package/
-cp lambda_function.py package/
-cd package && zip -r ../function.zip . && cd ..
+rm -f function.zip
+zip -qj function.zip lambda_function.py
 
 aws lambda update-function-code \
   --function-name "$FUNCTION_NAME" \
