@@ -14,6 +14,7 @@ export default defineNuxtConfig({
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321',
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || '',
       apiGatewayUrl: process.env.NUXT_PUBLIC_API_GATEWAY_URL || '',
+      ambientApiUrl: process.env.NUXT_PUBLIC_AMBIENT_API_URL || '',
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
     },
   },

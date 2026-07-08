@@ -1,11 +1,11 @@
 # Admin CMS — Nuxt 4 Dashboard (Role-Gated)
 
-> Cập nhật 2026-07-06 — đồng bộ với bản cài đặt cloud-only hiện tại (thêm nhóm Rejected users).
+> Cập nhật 2026-07-08 — thêm mục **Ambient Sound** (S3 upload/list + CRUD danh sách nhạc nền).
 
 > **Project:** Focus Mode App (Web-Only)  
 > **Platform:** Nuxt 4 (same codebase as main app, admin middleware)  
 > **Access:** Admin-only (`public.users.role === 'admin'` + Supabase RLS `is_admin()`)  
-> **Core Features:** User approval & role management + Media library CRUD + Embedding trigger  
+> **Core Features:** User approval & role management + Media library CRUD + Embedding trigger + Ambient Sound (S3 + CRUD)  
 
 ---
 
@@ -97,12 +97,13 @@ The seeded demo admin (`admin@focusmode.app`) is created with `role='admin'` and
 
 ## 3. Routes & Navigation
 
-Implemented pages (a shared tab bar links Overview / Users / Media):
+Implemented pages (a shared tab bar links Overview / Users / Media / Ambient):
 
 ```
-/admin                → Admin overview (cards linking to Users / Media + System Health placeholder)
+/admin                → Admin overview (cards linking to Users / Media / Ambient + System Health placeholder)
 /admin/users          → User approval + role management + delete
 /admin/media          → Media Library list + Add/Edit dialog + embedding triggers
+/admin/ambient        → Ambient Sound: S3 file management (upload/list) + CRUD danh sách nhạc nền
 ```
 
 > Note: there are **no** `/admin/media/add`, `/admin/media/[id]`, or `/admin/users/[id]` routes. Add/Edit media happens in a modal on `/admin/media`. Per-user detail pages are not implemented.
@@ -113,6 +114,7 @@ Implemented pages (a shared tab bar links Overview / Users / Media):
 
 - **User Management** → links to `/admin/users`
 - **Media Library** → links to `/admin/media`
+- **Ambient Sound** → links to `/admin/ambient`
 - **System Health** → placeholder card (API Gateway / Lambda / Supabase monitor — **not implemented**)
 
 > TODO (backend pending): aggregate stats (total users, total focus hours, active today, leaderboard, media-by-type) are **not** built. There is no `useAdminStats` composable and no `get_total_focus_hours` RPC. Live numeric counters currently exist only on the Users and Media pages.
@@ -273,3 +275,27 @@ Access the admin section at `/admin` (behind the `auth` + `admin` middleware).
 | **Vectorization cost**  | Admin-only trigger; backend (API Gateway + Lambda) gated separately — not yet deployed   |
 | **Data exposure**       | RLS: admins manage `media_library`; all authenticated users can `SELECT` it             |
 | **JWT expiry**          | Auto-refresh via Supabase SDK; failed loads surface an inline error with a fix hint     |
+
+## 11. Ambient Sound Management (`/admin/ambient`)
+
+`pages/admin/ambient.vue` (script: `useAmbientSounds` + `useConfig`). Hai phần tách bạch trên cùng một trang:
+
+### Phần 1 — S3 File Management (file vật lý trên AWS S3)
+Trình duyệt không ghi thẳng S3 được, nên đi qua Lambda `ambient-audio-manager` (API Gateway):
+
+- **Upload**: chọn file audio → xin **presigned PUT URL** (`POST /ambient/upload-url`) → `PUT` thẳng file lên S3 bằng `XMLHttpRequest` (có thanh progress). Content-Type phải khớp lúc ký, nếu không S3 báo `SignatureDoesNotMatch`.
+- **List**: `GET /ambient/files` → `ListObjectsV2` → bảng **File name · S3 Link · Size**, kèm **Copy link** và **Dùng ↓** (prefill sang Phần 2).
+- Cả 2 route gửi kèm `Authorization: Bearer <supabase access_token>` để qua JWT authorizer. Nếu chưa cấu hình `NUXT_PUBLIC_API_GATEWAY_URL` → hiện cảnh báo, vẫn cho dán link thủ công ở Phần 2.
+- Backend + hướng dẫn deploy (bucket, CORS, public-read policy, IAM `s3:ListBucket`): `aws/lambdas/ambient-audio-manager/README.md`. **Lưu ý tên bucket**: S3 không cho gạch dưới → dùng `focus-mode-ambient-audio` (khớp IAM `focus-mode-*`), KHÔNG dùng `ambient_web_audio`.
+
+### Phần 2 — User Display Management (CRUD bảng `public.ambient_sounds`)
+Đây chính là danh sách nhạc user thấy ở trang **Focus** — mọi thao tác CRUD đổi trực tiếp cái user thấy (cùng bảng, RLS đọc-all).
+
+- **Bảng**: `id`, `name` (Audio Name), `url` (S3 Link), `is_active`, `sort_order`, `created_by`, timestamps. Migration `00013_ambient_sounds.sql`.
+- **CRUD**: Add/Edit (dialog Name + URL, có `<audio>` preview), toggle **Hiện/Ẩn** (`is_active`), Delete (chỉ xóa dòng DB, **không** xóa file S3).
+- **RLS**: `ambient_read_all` (mọi user đã đăng nhập `SELECT`) + `ambient_write_admin` (`is_admin()` cho INSERT/UPDATE/DELETE).
+
+### Tích hợp phía user (trang Focus)
+- `components/AmbientPlayer.vue` nạp `listSounds(true)` (active) → render nút **Silence** + từng bài; `v-model` giờ là **URL** của track.
+- `composables/useAmbientSound.ts` phát **file MP3 thật** từ URL bằng `HTMLAudioElement` (loop + fade in/out) — thay cho nhạc synth WebAudio trước đây.
+- `focus_sessions.ambient_track` lưu URL của track đã chọn; `pages/focus.vue` tra URL → tên để hiển thị nhãn "Ambient:".

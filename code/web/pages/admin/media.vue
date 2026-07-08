@@ -12,6 +12,7 @@
       <NuxtLink to="/admin" class="tab">Overview</NuxtLink>
       <NuxtLink to="/admin/users" class="tab">Users</NuxtLink>
       <NuxtLink to="/admin/media" class="tab tab-active">Media</NuxtLink>
+      <NuxtLink to="/admin/ambient" class="tab">Ambient</NuxtLink>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 mb-6">

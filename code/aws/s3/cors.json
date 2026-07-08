@@ -1,0 +1,9 @@
+{
+  "CORSRules": [{
+    "AllowedOrigins": ["https://focusmode.click", "http://localhost:3000","https://main.d1efs1vwvbok9m.amplifyapp.com"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }]
+}

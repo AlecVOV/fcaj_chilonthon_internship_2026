@@ -145,6 +145,62 @@ paths:
         '200':
           description: Embedding generated
 
+  /ambient/upload-url:
+    post:
+      summary: Get presigned S3 PUT URL for an ambient audio upload (admin UI)
+      operationId: ambientUploadUrl
+      x-amazon-apigateway-integration:
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:ambient-audio-manager/invocations
+        httpMethod: POST
+        type: aws_proxy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename]
+              properties:
+                filename: { type: string }
+                contentType: { type: string }
+      responses:
+        '200':
+          description: Presigned upload URL + public URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl: { type: string }
+                  publicUrl: { type: string }
+                  key: { type: string }
+
+  /ambient/files:
+    get:
+      summary: List ambient audio files in the S3 bucket (admin UI)
+      operationId: ambientListFiles
+      x-amazon-apigateway-integration:
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:ambient-audio-manager/invocations
+        httpMethod: POST
+        type: aws_proxy
+      responses:
+        '200':
+          description: List of audio files with public URLs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        url: { type: string }
+                        size: { type: integer }
+                        lastModified: { type: string }
+
 components:
   securitySchemes:
     jwtAuth:

@@ -8,6 +8,7 @@
       <NuxtLink to="/admin" class="tab">Overview</NuxtLink>
       <NuxtLink to="/admin/users" class="tab tab-active">Users</NuxtLink>
       <NuxtLink to="/admin/media" class="tab">Media</NuxtLink>
+      <NuxtLink to="/admin/ambient" class="tab">Ambient</NuxtLink>
     </div>
 
     <div v-if="loadError" class="mb-6 rounded-lg border border-error/30 bg-error/5 p-4">

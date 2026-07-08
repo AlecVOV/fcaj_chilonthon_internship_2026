@@ -3,36 +3,50 @@
     <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Ambient Sound</p>
     <div class="flex gap-1.5 flex-wrap">
       <button
-        v-for="track in tracks"
-        :key="track.id"
         type="button"
-        @click="$emit('update:modelValue', track.id === 'none' ? null : track.id)"
+        @click="$emit('update:modelValue', null)"
         class="rounded-md border px-2.5 py-1 text-sm transition-colors"
-        :class="(modelValue === track.id || (track.id === 'none' && !modelValue))
+        :class="!modelValue
           ? 'border-primary bg-primary/10 text-primary dark:bg-primary/20'
           : 'border-hairline dark:border-hairline-dark text-ink dark:text-on-dark hover:bg-canvas-card dark:hover:bg-surface-dark-soft'"
       >
-        {{ track.label }}
+        Silence
+      </button>
+      <button
+        v-for="s in sounds"
+        :key="s.id"
+        type="button"
+        @click="$emit('update:modelValue', s.url)"
+        class="rounded-md border px-2.5 py-1 text-sm transition-colors"
+        :class="modelValue === s.url
+          ? 'border-primary bg-primary/10 text-primary dark:bg-primary/20'
+          : 'border-hairline dark:border-hairline-dark text-ink dark:text-on-dark hover:bg-canvas-card dark:hover:bg-surface-dark-soft'"
+      >
+        {{ s.name }}
       </button>
     </div>
-    <p class="text-2xs text-ink-soft dark:text-on-dark-soft/70">Plays during your focus session (synthesized, no download).</p>
+    <p v-if="loading" class="text-2xs text-ink-soft dark:text-on-dark-soft/70">Đang tải nhạc nền…</p>
+    <p v-else-if="sounds.length === 0" class="text-2xs text-ink-soft dark:text-on-dark-soft/70">
+      Haven't gone through any ambient sounds yet. Admin can add some in Admin → Ambient.
+    </p>
+    <p v-else class="text-2xs text-ink-soft dark:text-on-dark-soft/70">Playing while you focus.</p>
   </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{
-  modelValue: string | null
-}>()
+import { useAmbientSounds, type AmbientSound } from '~/composables/useAmbientSounds'
 
-defineEmits<{
-  'update:modelValue': [trackId: string | null]
-}>()
+// modelValue = URL của track đang chọn (null = Silence).
+defineProps<{ modelValue: string | null }>()
+defineEmits<{ 'update:modelValue': [url: string | null] }>()
 
-// Ids must match the presets synthesized in composables/useAmbientSound.ts
-const tracks = [
-  { id: 'none', label: 'Silence' },
-  { id: 'rain', label: 'Rain' },
-  { id: 'cafe', label: 'Cafe' },
-  { id: 'waves', label: 'Waves' },
-]
+const { listSounds } = useAmbientSounds()
+const sounds = ref<AmbientSound[]>([])
+const loading = ref(true)
+
+onMounted(async () => {
+  try { sounds.value = await listSounds(true) }
+  catch { /* để trống — trang Focus vẫn dùng được với Silence */ }
+  finally { loading.value = false }
+})
 </script>

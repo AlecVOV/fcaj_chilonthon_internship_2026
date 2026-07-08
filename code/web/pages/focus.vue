@@ -96,6 +96,7 @@ import { useDataService } from '~/composables/useDataService'
 import { useEmotionDetector } from '~/composables/useEmotionDetector'
 import { useRAG } from '~/composables/useRAG'
 import { useAmbientSound } from '~/composables/useAmbientSound'
+import { useAmbientSounds, type AmbientSound } from '~/composables/useAmbientSounds'
 import dayjs from 'dayjs'
 
 definePageMeta({ middleware: ['auth'] })
@@ -117,9 +118,15 @@ const saveError = ref('')
 const saving = ref(false)
 
 const ambient = useAmbientSound()
+const { listSounds } = useAmbientSounds()
+const ambientSounds = ref<AmbientSound[]>([])
 const durations = [{ label: '15m', seconds: 15 * 60 }, { label: '25m', seconds: 25 * 60 }, { label: '45m', seconds: 45 * 60 }]
-const ambientLabels: Record<string, string> = { rain: 'Rain', cafe: 'Cafe', waves: 'Waves' }
-const selectedAmbientLabel = computed(() => focusStore.ambientTrack ? (ambientLabels[focusStore.ambientTrack] || focusStore.ambientTrack) : 'Silence')
+// focusStore.ambientTrack giờ là URL của file → tra ngược ra tên để hiển thị.
+const selectedAmbientLabel = computed(() => {
+  const url = focusStore.ambientTrack
+  if (!url) return 'Silence'
+  return ambientSounds.value.find(s => s.url === url)?.name || 'Ambient'
+})
 
 // Ambient audio follows the timer lifecycle (also covers a session restored after reload).
 watch(() => focusStore.status, (s) => {
@@ -128,7 +135,12 @@ watch(() => focusStore.status, (s) => {
 }, { immediate: true })
 onBeforeUnmount(() => ambient.stop())
 
-onMounted(async () => { await taskStore.fetchTasks(); recentSessions.value = await getSessions(); recentSessions.value.sort((a: any, b: any) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()) })
+onMounted(async () => {
+  await taskStore.fetchTasks()
+  recentSessions.value = await getSessions()
+  recentSessions.value.sort((a: any, b: any) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+  try { ambientSounds.value = await listSounds(true) } catch { /* nhãn ambient sẽ fallback 'Ambient' */ }
+})
 
 function startSession() {
   const title = selectedTaskId.value ? (taskStore.tasks.find(t => t.id === selectedTaskId.value)?.title ?? undefined) : undefined

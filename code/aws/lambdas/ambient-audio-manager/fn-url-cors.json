@@ -1,0 +1,10 @@
+{
+  "AllowOrigins": [
+    "https://main.d1efs1vwvbok9m.amplifyapp.com",
+    "https://focusmode.click",
+    "http://localhost:3000"
+  ],
+  "AllowMethods": ["GET", "POST"],
+  "AllowHeaders": ["authorization", "content-type"],
+  "MaxAge": 3000
+}

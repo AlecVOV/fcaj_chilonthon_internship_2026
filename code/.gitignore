@@ -30,3 +30,8 @@ Thumbs.db
 *.mp3
 *.wav
 *.m4a
+
+# ── AWS Lambda build artifacts / scratch ───────
+aws/lambdas/**/function.zip
+aws/lambdas/**/package/
+aws/lambdas/**/log.txt

@@ -90,7 +90,7 @@ web/
 │
 ├── components/
 │   ├── AgentChat.vue        # Giao diện chat tạo task
-│   ├── AmbientPlayer.vue    # Chọn preset ambient (Rain/Cafe/Waves) → phát nhạc thật qua useAmbientSound
+│   ├── AmbientPlayer.vue    # Nạp danh sách nhạc nền từ DB (ambient_sounds) → phát file MP3 từ S3 qua useAmbientSound
 │   ├── ColorModeToggle.vue  # Nút Light/Dark
 │   ├── EmotionBadge.vue     # Badge nhãn cảm xúc
 │   ├── ExportReportButton.vue # Nút xuất báo cáo worklog
@@ -107,7 +107,8 @@ web/
 │   ├── useEmotionDetector.ts# Phát hiện cảm xúc từ text
 │   ├── useRAG.ts            # Gợi ý nội dung theo cảm xúc
 │   ├── useReportExport.ts   # Sinh & xuất báo cáo worklog (Markdown/PDF)
-│   ├── useAmbientSound.ts   # Tổng hợp ambient (Rain/Cafe/Waves) bằng WebAudio, không cần file nhạc
+│   ├── useAmbientSound.ts   # Phát file MP3 nền từ URL (HTMLAudio, loop + fade)
+│   ├── useAmbientSounds.ts  # CRUD bảng ambient_sounds (Supabase) + upload/list S3 qua API Gateway
 │   ├── useOffline.ts        # Chỉ báo trạng thái mạng (online/offline)
 │   └── useScrollZoom.ts     # Hiệu ứng scroll-zoom cho landing page
 │
@@ -135,9 +136,10 @@ web/
 | `/calendar` | Heatmap focus theo tháng + bảng các phiên (ngày, thời lượng, mood, journal) | User |
 | `/agent` | Wrapper chứa `AgentChat` — chat để AI tạo task | User |
 | `/profile` | Thông tin tài khoản, đổi mật khẩu, stats + worklog 14 ngày gần nhất | User |
-| `/admin` | Tổng quan admin (tab Overview/Users/Media), điều hướng & system health | Admin |
+| `/admin` | Tổng quan admin (tab Overview/Users/Media/Ambient), điều hướng & system health | Admin |
 | `/admin/users` | Duyệt đăng ký theo mục **Pending / Approved / Rejected** (approve/reject/re-approve/set-pending → đổi `status` trong Supabase), nâng/hạ quyền, xóa user (không tự xóa) | Admin |
 | `/admin/media` | CRUD media (sutra/audio/video), trạng thái embedding, sinh embedding lẻ/hàng loạt, tìm kiếm | Admin |
+| `/admin/ambient` | **Ambient Sound**: (1) upload MP3 lên S3 + list file bucket (qua Lambda presigned); (2) CRUD bảng `ambient_sounds` = danh sách nhạc user thấy ở trang Focus | Admin |
 
 **Điều hướng (middleware):**
 - `auth.ts`: route public = `/`, `/login`, `/author`. Chưa đăng nhập → `/login?redirect=`. Admin truy cập trang user → chuyển `/admin`; user thường truy cập `/admin/*` → chuyển `/dashboard`.
@@ -154,7 +156,8 @@ web/
 - **useEmotionDetector** — Phát hiện cảm xúc từ text qua endpoint `/emotion`, fallback bằng regex (focused/stressed/exhausted/relaxed).
 - **useRAG** — Lấy gợi ý nội dung theo cảm xúc qua `/rag`, fallback nội dung hardcode (sutra, bài tập thở).
 - **useReportExport** — Sinh báo cáo Markdown hằng ngày (focus time, mood, task, streak), upload qua `/report` hoặc tải `.md` ở client. Dùng `dayjs`.
-- **useAmbientSound** — Tổng hợp âm thanh nền (Rain/Cafe/Waves) trực tiếp bằng WebAudio (noise + filter, không tải file); graph singleton chỉ phát một track tại một thời điểm. `AmbientPlayer` chọn preset, trang `/focus` gọi `play/stop` theo vòng đời timer.
+- **useAmbientSound** — Phát **file MP3 nền thật** từ S3 URL bằng `HTMLAudioElement` (loop + fade in/out); singleton chỉ phát một track tại một thời điểm. Danh sách nhạc do Admin quản lý ở bảng `ambient_sounds`; `AmbientPlayer` nạp track active (URL) rồi trang `/focus` gọi `play/stop` theo vòng đời timer. (Trước đây là nhạc synth WebAudio — đã thay bằng file thật.)
+- **useAmbientSounds** — Tính năng Ambient Sound cho Admin: (Phần 2) CRUD bảng `public.ambient_sounds` qua Supabase (`listSounds/createSound/updateSound/deleteSound`, RLS `is_admin()` cho ghi); (Phần 1) upload file lên S3 (`uploadS3File` xin presigned PUT URL rồi PUT thẳng, có progress) + list bucket (`listS3Files`) qua Lambda `ambient-audio-manager` (API Gateway), gửi kèm Supabase JWT.
 - **useOffline** — Chỉ báo `navigator.onLine`, hiển thị toast khi mất/khôi phục mạng (không còn liên quan sync/offline-first).
 - **useScrollZoom** — Hiệu ứng sticky scroll-zoom cho các section landing page (CSS var `--zoom-progress`, requestAnimationFrame).
 
