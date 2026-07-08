@@ -108,49 +108,54 @@ Add: `NUXT_PUBLIC_AMBIENT_API_URL` = cùng URL → **Redeploy** (Amplify build l
 | Upload lỗi CORS thật | Bucket CORS thiếu origin đang chạy → thêm origin vào `aws/s3/cors.json` rồi `aws s3api put-bucket-cors ...`. |
 | Nhạc không phát (403) | File chưa public → kiểm tra bucket policy (đã có, GET phải = 200). |
 | Nút nhạc trống ở /focus | Chưa thêm bài ở Phần 2, hoặc chưa chạy migration 00013. |
+| `/ambient/files` **401** dù đã đăng nhập admin | Token Supabase ký **ES256** (asymmetric signing keys), KHÔNG phải HS256 → verify bằng legacy secret luôn fail. **Đã fix**: để Supabase validate token (gọi REST), không tự verify chữ ký. Xem "Bug auth" bên dưới. |
+| `/ambient/files` **403** với đúng tài khoản admin | Admin đọc được **nhiều dòng** `users` (RLS), code lấy nhầm `rows[0]` (≠ admin). **Đã fix**: lọc `?id=eq.{sub}` lấy đúng dòng của caller. Xem "Bug auth" bên dưới. |
 
 ---
 
-## Bảo mật (hiện trạng — đọc kỹ)
+## Bảo mật (hiện trạng — đã BẬT auth admin-only)
 
-- **API Gateway đang PUBLIC, không authorizer.** Frontend có gửi `Authorization: Bearer <Supabase JWT>`
-  nhưng API **chưa verify** → ai có URL đều gọi được `/ambient/upload-url` và `/ambient/files`
-  (xin presigned URL để upload lên bucket + liệt kê file). **Chấp nhận được cho demo.**
-- **Bảng CRUD (Phần 2) vẫn an toàn**: đọc/ghi `ambient_sounds` qua Supabase, RLS chặn ghi
-  cho người không phải admin (`is_admin()`). Kẻ lạ không sửa được danh sách nhạc user thấy.
-- **Rủi ro thực tế nếu để public**: người có URL có thể upload file rác vào bucket (tốn dung lượng).
-  Bucket chỉ chứa nhạc nền không nhạy cảm nên tác động thấp.
-- **Siết lại — CÁCH 2 (verify token trong Lambda) ĐÃ IMPLEMENT** ✅ trong `lambda_function.py`:
-  hàm `_authorize()` verify Supabase JWT **HS256** (chữ ký + `exp` + `aud`) rồi gọi Supabase REST
-  (bằng chính token user, RLS-scoped) để chắc chắn `role='admin'`. **Bật bằng cách set env** (xem Bước 7).
-- **Cách 1 (JWT authorizer ở API Gateway) — GIỮ LÀM TÀI LIỆU, KHÔNG dùng**: Supabase phát JWT
-  **HS256 (khóa đối xứng)** → authorizer JWT native của API Gateway (cần JWKS/RS256) **không verify được**
-  → sẽ phải viết custom Lambda authorizer. Vì vậy chọn cách 2 (nhẹ hơn, không cần authorizer riêng).
-  (Trùng P0 auth trong `PROJECT_STATE.md`.)
+- **API Gateway public, KHÔNG authorizer** — nhưng **Lambda tự xác thực** trong `_authorize()`:
+  bắt buộc có `Authorization: Bearer <token>`, để **Supabase validate token** + chỉ cho **admin**.
+- **Bật khi có env `SUPABASE_URL` + `SUPABASE_ANON_KEY`** (đã set). Không set 2 biến này = public.
+  → Không cần `SUPABASE_JWT_SECRET` nữa (biến này giờ **thừa**, có thể xoá).
+- **Cách hoạt động (cách 2 — để Supabase validate, thuật-toán-agnostic):**
+  1. Lấy token từ header `Authorization: Bearer`.
+  2. Lấy `sub` bằng cách decode payload (KHÔNG tự verify chữ ký — vì token là **ES256**, xem Bug #1).
+  3. Gọi `GET {SUPABASE_URL}/rest/v1/users?id=eq.{sub}&select=id,role` **kèm token đó**
+     → PostgREST **verify token bằng đúng khóa của project** (mọi thuật toán) + RLS.
+  4. Token sai/hết hạn → PostgREST 401 → Lambda **401**. `role != 'admin'` → **403**. `role='admin'` → cho qua.
+- **Bảng CRUD (Phần 2)** vẫn được RLS `is_admin()` bảo vệ độc lập ở tầng Supabase.
+- **Cách 1 (JWT authorizer native ở API Gateway) — KHÔNG dùng**: chỉ verify được RS/ES qua JWKS
+  hoặc HS qua secret; cấu hình rườm rà hơn cách 2. Giữ làm tài liệu (trùng P0 auth `PROJECT_STATE.md`).
 
-## Bước 7 — Bật auth (cách 2) khi muốn siết
+### 🐛 Bug auth đã gặp & fix (ghi lại để không dẫm lại)
 
-Đã có sẵn `SUPABASE_URL` + `SUPABASE_ANON_KEY` trên Lambda. Chỉ cần thêm **JWT Secret** của Supabase
-(**Supabase Dashboard → Project Settings → API → JWT Settings → "JWT Secret"** — chuỗi dài).
+**Bug #1 — 401 dù đã đăng nhập admin.** Ban đầu Lambda tự verify chữ ký JWT bằng **HS256** với
+"Legacy JWT secret". Nhưng project này đã bật **JWT Signing Keys bất đối xứng** → access_token của user
+ký bằng **ES256** (header `{"alg":"ES256"}`), KHÔNG phải HS256. (Anon key vẫn là HS256 nên verify anon
+key PASS gây nhầm là secret đúng — nhưng token user thì khác khóa.) Verify HS256 luôn fail chữ ký → 401.
+→ **Fix:** bỏ tự verify; **để PostgREST/Supabase validate token** (gọi REST kèm token). Đúng cho mọi
+thuật toán, khỏi lệ thuộc secret. `SUPABASE_JWT_SECRET` từ đó không cần nữa.
 
-**Cách dễ (Console, tự merge, không mất var khác):** Lambda Console → `ambient-audio-manager` →
-Configuration → Environment variables → Edit → Add → key `SUPABASE_JWT_SECRET`, value `<jwt secret>` → Save.
+**Bug #2 — 403 với đúng tài khoản admin.** Sau khi qua 401, code hỏi `GET /rest/v1/users?select=id,role`
+rồi lấy `rows[0].role`. Với **admin**, RLS cho đọc **TẤT CẢ** users (để admin panel liệt kê) → query trả
+**nhiều dòng** (log thực tế: `rows=6 role=user`), `rows[0]` là một user bất kỳ ≠ admin → 403.
+→ **Fix:** decode `sub` từ token rồi lọc **`?id=eq.{sub}`** để lấy **đúng dòng của caller** (luôn 1 dòng),
+đọc `role` của chính họ. (Log sau fix: `rows=1 role=admin` → 200.)
 
-**Hoặc CLI** (phải liệt kê ĐỦ 4 var vì nó ghi đè cả map — thay `<...>`):
-```bat
-aws lambda update-function-configuration --function-name ambient-audio-manager --region ap-southeast-1 --environment "Variables={AMBIENT_S3_BUCKET=focus-mode-ambient-audio,SUPABASE_URL=https://uxvbcezmamdbzzplsner.supabase.co,SUPABASE_ANON_KEY=<anon_key>,SUPABASE_JWT_SECRET=<jwt_secret>}"
-```
+**Bài học:** (1) đừng giả định thuật toán ký JWT của Supabase — kiểm `alg` trong header; ưu tiên để
+Supabase tự validate. (2) đừng giả định RLS chỉ trả 1 dòng — với admin (`is_admin()`) nó trả cả bảng;
+luôn lọc theo `sub`.
 
-**Sau khi bật, kiểm:**
-- Vào web (đang đăng nhập admin) → `/admin/ambient` vẫn thấy file (token admin hợp lệ → qua).
-- `curl ".../ambient/files"` **không kèm token** → phải trả **401**.
-- Đã verify sẵn (bằng secret tạm): JWT hợp lệ→200, thiếu token→401, token sai→401. ✅
+## Bước 7 — Auth (đã bật) & vận hành
 
-**Nếu lỡ bật sai làm admin bị chặn** (401/403): xoá var `SUPABASE_JWT_SECRET` (Console → Remove, hoặc
-CLI set lại map không có secret) → về public ngay.
-
-> 🔑 **Rotate secret:** `SUPABASE_JWT_SECRET` = "Legacy JWT secret" trong Supabase (Project Settings →
-> API → JWT Settings). **Nếu sau này rotate/đổi legacy secret bên Supabase thì PHẢI cập nhật lại biến
-> này trên Lambda**, nếu không token admin sẽ verify fail → **admin bị 401**. (Anon key hiển thị trong
-> `.env` cũng ký bằng secret này nên rotate là ảnh hưởng cả hệ.)
-- **Tối thiểu khác**: giới hạn IP/WAF, hoặc rút ngắn hạn presigned (đang 5 phút).
+- **Đã bật sẵn** (env `SUPABASE_URL` + `SUPABASE_ANON_KEY` có trên Lambda). Không cần làm gì thêm.
+- **Kiểm nhanh:**
+  - Admin đăng nhập → `/admin/ambient` thấy file (200). *(Đã xác nhận chạy.)*
+  - `curl ".../ambient/files"` **không token** → **401**; token rác → 401; user thường → 403.
+- **Tạm tắt auth (về public)** nếu cần: xoá `SUPABASE_URL` **hoặc** `SUPABASE_ANON_KEY` khỏi env Lambda.
+- **Dọn:** có thể **xoá biến `SUPABASE_JWT_SECRET`** (không còn dùng sau khi bỏ verify HS256).
+- **Log chẩn đoán:** Lambda in `AUTH: header_present=.. alg=..` và `AUTH: rows=.. role=..` +
+  `AUTH DENY <code>: <lý do>` vào CloudWatch `/aws/lambda/ambient-audio-manager` — soi khi có sự cố.
+- **Siết thêm (tùy chọn):** giới hạn IP/WAF, rút ngắn hạn presigned (đang 5 phút).

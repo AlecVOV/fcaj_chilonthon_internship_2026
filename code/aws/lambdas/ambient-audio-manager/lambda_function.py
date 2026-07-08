@@ -14,26 +14,24 @@ Env vars:
   AMBIENT_S3_BUCKET   (bắt buộc)  tên bucket, VD: focus-mode-ambient-audio
   AMBIENT_S3_PREFIX   (tùy chọn)  prefix/thư mục trong bucket, VD: "ambient/" (mặc định "")
   AWS_REGION          (Lambda tự set)
-  SUPABASE_JWT_SECRET (tùy chọn)  BẬT auth: verify Supabase JWT (HS256) ngay trong Lambda.
-                                  KHÔNG set = endpoint public (như cũ).
-  SUPABASE_URL        (tùy chọn)  + ANON_KEY để check thêm role admin (RLS đọc chính user đó).
-  SUPABASE_ANON_KEY   (tùy chọn)
+  SUPABASE_URL        (bật auth)  URL project Supabase, VD: https://xxx.supabase.co
+  SUPABASE_ANON_KEY   (bật auth)  anon key (để đính apikey vào request PostgREST)
 
-Xác thực (cách 2 — verify token trong Lambda): nếu có SUPABASE_JWT_SECRET, Lambda tự
-verify chữ ký HS256 + hạn (exp) + aud của access_token Supabase mà frontend gửi qua
-header Authorization: Bearer. Nếu thêm SUPABASE_URL + ANON_KEY, Lambda gọi Supabase REST
-(bằng chính token của user, RLS-scoped) để chắc chắn user có role='admin'. Không set secret
-thì bỏ qua (public) để không phá vỡ deploy đang chạy.
-(Cách 1 — JWT authorizer ở API Gateway — xem DEPLOY-cmd.md, không dùng vì Supabase HS256.)
+Xác thực (cách 2 — để Supabase tự validate token, thuật-toán-agnostic):
+Có SUPABASE_URL + ANON_KEY = BẬT auth. Lambda KHÔNG tự verify chữ ký (tránh phụ thuộc
+HS256 vs RS256/ES256). Thay vào đó lấy access_token từ header Authorization: Bearer rồi
+gọi GET {SUPABASE_URL}/rest/v1/users?select=id,role kèm token đó — PostgREST verify token
+bằng đúng khóa của project (bất kể thuật toán) và RLS `users_self_access` chỉ trả về CHÍNH
+dòng của caller → đọc role. Token sai/hết hạn → PostgREST 401. role != 'admin' → 403.
+Không set URL/ANON = endpoint public (không phá deploy đang chạy).
+(Cách 1 — JWT authorizer ở API Gateway — xem DEPLOY-cmd.md, không dùng.)
 """
 
 import base64
-import hashlib
-import hmac
 import json
 import os
 import re
-import time
+import urllib.error
 import urllib.request
 import boto3
 from urllib.parse import quote
@@ -43,9 +41,8 @@ REGION = os.environ.get('AWS_REGION', 'ap-southeast-1')
 BUCKET = os.environ.get('AMBIENT_S3_BUCKET', 'focus-mode-ambient-audio')
 PREFIX = os.environ.get('AMBIENT_S3_PREFIX', '')
 
-# ── Auth (verify Supabase JWT ngay trong Lambda — cách 2) ────────────────────
-SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET', '')  # có = bật auth
-SUPABASE_URL = os.environ.get('SUPABASE_URL', '')                # + để check admin
+# ── Auth (để Supabase validate token — cách 2) ───────────────────────────────
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')          # có URL + ANON = bật auth
 SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
 
 # SigV4 + endpoint REGIONAL (virtual-hosted) để presigned URL ký đúng host
@@ -103,53 +100,41 @@ class AuthError(Exception):
         self.msg = msg
 
 
-def _b64url_decode(seg):
-    seg += '=' * (-len(seg) % 4)               # pad lại cho đủ bội số 4
-    return base64.urlsafe_b64decode(seg.encode())
+def _raw_auth_header(event):
+    headers = event.get('headers') or {}
+    for k, v in headers.items():               # key có thể hoa/thường tùy payload
+        if k.lower() == 'authorization':
+            return v or ''
+    return ''
 
 
 def _bearer_token(event):
-    headers = event.get('headers') or {}
-    auth = ''
-    for k, v in headers.items():               # key có thể hoa/thường tùy payload
-        if k.lower() == 'authorization':
-            auth = v or ''
-            break
+    auth = _raw_auth_header(event)
     if not auth.lower().startswith('bearer '):
         raise AuthError(401, 'Thiếu Authorization: Bearer token.')
     return auth[7:].strip()
 
 
-def _verify_jwt(token):
-    """Verify HS256 Supabase access_token bằng stdlib. Trả claims nếu hợp lệ."""
-    parts = token.split('.')
-    if len(parts) != 3:
-        raise AuthError(401, 'JWT sai định dạng.')
-    header_b64, payload_b64, sig_b64 = parts
-    expected = hmac.new(SUPABASE_JWT_SECRET.encode(),
-                        f'{header_b64}.{payload_b64}'.encode(), hashlib.sha256).digest()
+def _token_claim(token, seg_idx, key, default=None):
+    """Đọc 1 claim trong JWT (header/payload) — KHÔNG verify, chỉ để lấy sub/alg.
+    An toàn vì token vẫn được PostgREST verify khi gọi REST; sub chỉ dùng để
+    khớp ĐÚNG dòng của caller trong kết quả (admin đọc được nhiều dòng)."""
     try:
-        actual = _b64url_decode(sig_b64)
+        seg = token.split('.')[seg_idx]
+        seg += '=' * (-len(seg) % 4)
+        return json.loads(base64.urlsafe_b64decode(seg.encode())).get(key, default)
     except Exception:
-        raise AuthError(401, 'JWT chữ ký lỗi định dạng.')
-    if not hmac.compare_digest(expected, actual):
-        raise AuthError(401, 'JWT chữ ký không hợp lệ.')
-    try:
-        claims = json.loads(_b64url_decode(payload_b64))
-    except Exception:
-        raise AuthError(401, 'JWT payload lỗi.')
-    if claims.get('exp') and int(time.time()) >= int(claims['exp']):
-        raise AuthError(401, 'Token đã hết hạn — đăng nhập lại.')
-    aud = claims.get('aud')
-    auds = aud if isinstance(aud, list) else [aud]
-    if aud and 'authenticated' not in auds:
-        raise AuthError(403, 'aud không hợp lệ.')
-    return claims
+        return default
 
 
-def _require_admin(token, sub):
-    """Hỏi Supabase REST (bằng token của chính user, RLS-scoped) xem có role='admin'."""
-    url = f'{SUPABASE_URL}/rest/v1/users?id=eq.{sub}&select=role'
+def _require_admin_via_supabase(token):
+    """Để PostgREST verify token (mọi thuật toán). RLS: user thường chỉ đọc dòng
+    của mình; ADMIN đọc được TẤT CẢ dòng → phải khớp ĐÚNG dòng caller theo sub,
+    KHÔNG dùng rows[0]."""
+    sub = _token_claim(token, 1, 'sub')
+    if not sub:
+        raise AuthError(401, 'Token thiếu sub.')
+    url = f'{SUPABASE_URL}/rest/v1/users?id=eq.{sub}&select=id,role'
     req = urllib.request.Request(url, headers={
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': f'Bearer {token}',
@@ -158,22 +143,29 @@ def _require_admin(token, sub):
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             rows = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise AuthError(401, 'Token không hợp lệ hoặc đã hết hạn.')
+        raise AuthError(403, f'Supabase từ chối xác thực (HTTP {e.code}).')
     except Exception as e:  # noqa: BLE001
-        raise AuthError(403, f'Không kiểm tra được quyền admin: {e}')
+        raise AuthError(403, f'Không xác thực được: {e}')
     role = rows[0].get('role') if rows else None
+    print(f'AUTH: rows={len(rows)} role={role}')
+    if not rows:
+        raise AuthError(401, 'Token không hợp lệ (không xác định được tài khoản).')
     if role != 'admin':
-        raise AuthError(403, 'Chỉ admin được dùng chức năng này.')
+        raise AuthError(403, f'Tài khoản không phải admin (role={role}).')
 
 
 def _authorize(event):
-    """Bật khi có SUPABASE_JWT_SECRET; thêm check admin nếu có URL + ANON_KEY."""
-    if not SUPABASE_JWT_SECRET:
-        print('WARN: SUPABASE_JWT_SECRET chưa set — endpoint đang PUBLIC (không verify).')
+    """Bật auth khi có SUPABASE_URL + ANON_KEY. Để Supabase validate token."""
+    if not (SUPABASE_URL and SUPABASE_ANON_KEY):
+        print('WARN: SUPABASE_URL/ANON_KEY chưa set — endpoint đang PUBLIC.')
         return
-    token = _bearer_token(event)
-    claims = _verify_jwt(token)
-    if SUPABASE_URL and SUPABASE_ANON_KEY:
-        _require_admin(token, claims.get('sub'))
+    raw = _raw_auth_header(event)
+    token = _bearer_token(event)               # 401 nếu thiếu
+    print(f'AUTH: header_present={bool(raw)} alg={_token_claim(token, 0, "alg", "?")}')
+    _require_admin_via_supabase(token)
 
 
 def handler(event, context):
@@ -186,6 +178,7 @@ def handler(event, context):
     try:
         _authorize(event)
     except AuthError as e:
+        print(f'AUTH DENY {e.status}: {e.msg}')
         return _resp(e.status, {'message': e.msg})
 
     try:

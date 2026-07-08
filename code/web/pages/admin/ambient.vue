@@ -16,15 +16,15 @@
       <div class="px-5 py-3 border-b border-hairline dark:border-hairline-dark">
         <h2 class="text-sm font-medium text-ink dark:text-on-dark">1 · S3 File Management</h2>
         <p class="mt-0.5 text-2xs text-ink-muted dark:text-on-dark-soft">
-          Upload file MP3 lên S3 bucket <code>{{ bucketLabel }}</code>, rồi copy link để thêm vào danh sách bên dưới.
+          Upload file MP3 into S3 bucket <code>{{ bucketLabel }}</code>, then copy the link to add into the list below.
         </p>
       </div>
 
       <div class="p-5 space-y-4">
         <div v-if="!apiConfigured" class="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning dark:text-warning">
           ⚠️ Chưa cấu hình <code>NUXT_PUBLIC_API_GATEWAY_URL</code> + Lambda <code>ambient-audio-manager</code>.
-          Upload/list S3 sẽ không chạy. Xem <code>aws/lambdas/ambient-audio-manager/README.md</code>.
-          Trong lúc đó bạn vẫn có thể dán link S3 thủ công ở Phần 2.
+          Upload/list S3 will not work. See <code>aws/lambdas/ambient-audio-manager/README.md</code>.
+          In the meantime, you can still manually paste S3 links in Section 2.
         </div>
 
         <!-- Upload -->

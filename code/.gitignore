@@ -35,3 +35,7 @@ Thumbs.db
 aws/lambdas/**/function.zip
 aws/lambdas/**/package/
 aws/lambdas/**/log.txt
+
+# ── Python cache ───────────────────────────────
+__pycache__/
+*.pyc
