@@ -99,10 +99,11 @@ export function useAgentChat() {
     isLoading.value = true
     error.value = null
 
-    // 1) Đảm bảo có conversation (tạo nếu là tin đầu).
+    // 1) Đảm bảo có conversation (tạo nếu là tin đầu). Nếu DB chưa sẵn (chưa chạy
+    //    migration 00014) -> degrade: chạy IN-MEMORY, agent vẫn dùng được (không lưu).
     let convId = currentId.value
-    try {
-      if (!convId) {
+    if (!convId) {
+      try {
         const title = text.slice(0, 60)
         const { data, error: e } = await getSupabase()
           .from('agent_conversations').insert({ user_id: uid(), title }).select('id, title, updated_at').single()
@@ -110,16 +111,15 @@ export function useAgentChat() {
         convId = (data as any).id
         currentId.value = convId
         conversations.value.unshift({ id: (data as any).id, title: (data as any).title, updatedAt: (data as any).updated_at })
+      } catch (e: any) {
+        console.warn('Chat persistence unavailable (đã chạy migration 00014?):', e?.message)
+        // tiếp tục in-memory (convId = null -> không lưu lịch sử)
       }
-    } catch (e: any) {
-      error.value = e?.message || 'Không tạo được hội thoại'
-      isLoading.value = false
-      return
     }
 
-    // 2) Lưu + hiển thị tin user.
+    // 2) Lưu (nếu có convId) + hiển thị tin user.
     messages.value.push({ role: 'user', text, timestamp: new Date().toISOString() })
-    _insertMessage(convId!, 'user', text).catch(() => {})
+    if (convId) _insertMessage(convId, 'user', text).catch(() => {})
 
     // 3) Gọi agent-bff.
     try {
@@ -129,14 +129,16 @@ export function useAgentChat() {
 
       const response = await $fetch<{ responseText: string }>(`${apiGatewayUrl.value}/agent/chat`, {
         method: 'POST',
-        body: { sessionId: convId, inputText: text },
+        body: { sessionId: convId || 'default', inputText: text },
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
 
       const agentText = response.responseText || '(không có nội dung)'
       messages.value.push({ role: 'agent', text: agentText, timestamp: new Date().toISOString() })
-      _insertMessage(convId!, 'agent', agentText).catch(() => {})
-      _touchConversation(convId!).catch(() => {})
+      if (convId) {
+        _insertMessage(convId, 'agent', agentText).catch(() => {})
+        _touchConversation(convId).catch(() => {})
+      }
     } catch (e: any) {
       const status = e?.statusCode ?? e?.response?.status
       const backendMsg = e?.data?.message
