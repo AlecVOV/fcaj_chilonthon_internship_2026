@@ -62,7 +62,17 @@
         <div v-if="worklogDays.length === 0" class="py-8 text-center text-sm text-ink-soft dark:text-on-dark-soft/70">No worklog data yet. Complete focus sessions to generate history.</div>
         <div v-else class="space-y-4">
           <div v-for="day in worklogDays" :key="day.date" class="rounded-md border border-hairline dark:border-hairline-dark p-4">
-            <h3 class="font-display text-base text-ink dark:text-on-dark mb-2">{{ dayjs(day.date).format('dddd, MMMM D, YYYY') }}</h3>
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <h3 class="font-display text-base text-ink dark:text-on-dark">{{ dayjs(day.date).format('dddd, MMMM D, YYYY') }}</h3>
+              <button
+                @click="downloadReport(day.date)"
+                :disabled="isExporting"
+                class="shrink-0 rounded-md border border-hairline dark:border-hairline-dark px-2.5 py-1 text-xs text-ink-muted dark:text-on-dark-soft hover:bg-canvas-card dark:hover:bg-surface-dark-soft disabled:opacity-50"
+                title="Tải báo cáo Markdown của ngày này"
+              >
+                ⬇ Report
+              </button>
+            </div>
             <div class="text-ink-body dark:text-on-dark-soft text-sm">
               <p><strong>Focus Time:</strong> {{ day.totalMinutes }} min across {{ day.sessionsCount }} session(s)</p>
               <p v-if="day.tasksCompleted.length"><strong>Tasks Completed:</strong> {{ day.tasksCompleted.join(', ') }}</p>
@@ -90,12 +100,14 @@
 <script setup lang="ts">
 import { useAuth } from '~/composables/useAuth'
 import { useDataService } from '~/composables/useDataService'
+import { useReportExport } from '~/composables/useReportExport'
 import dayjs from 'dayjs'
 
 definePageMeta({ middleware: ['auth'] })
 
 const { currentUser, isAdmin, changePassword, updateAccount } = useAuth()
 const { getTasks, getSessions } = useDataService()
+const { downloadReport, isExporting } = useReportExport()
 
 const allTasks = ref<any[]>([]); const allSessions = ref<any[]>([])
 const cpCurrent = ref(''); const cpNew = ref(''); const cpMsg = ref(''); const cpSuccess = ref(false)

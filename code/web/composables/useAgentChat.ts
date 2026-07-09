@@ -1,131 +1,159 @@
 // composables/useAgentChat.ts
 //
-// Agent Chat composable — communicates with Bedrock Task Manager Agent
-// via API Gateway → Lambda BFF → Bedrock InvokeAgent.
+// Agent Chat — nhiều đoạn hội thoại, LƯU vào Supabase (agent_conversations + agent_messages).
+// State ở MODULE-LEVEL (shared) để sidebar (danh sách đoạn chat) và khung chat dùng chung.
 //
-// Flow:
-//   User types task request → POST /agent/chat { sessionId, inputText }
-//     → Lambda BFF calls Bedrock InvokeAgent
-//     → Agent evaluates task detail
-//       ├── Fully detailed → Agent writes to Supabase via Action Group
-//       └── Missing details → Agent returns follow-up questions
-//     → Lambda BFF returns response to frontend
-//     → Frontend displays: "Task created" or follow-up questions
+// Luồng gửi: đảm bảo có conversation (tạo nếu chưa) -> lưu tin user -> gọi agent-bff
+//   (sessionId = conversation.id) -> lưu tin agent. Lỗi (vd 429 giới hạn) chỉ hiển thị,
+//   không lưu vào lịch sử.
 
+import { getSupabase } from '~/lib/supabaseClient'
 import { useAuth } from '~/composables/useAuth'
 import { useConfig } from '~/composables/useConfig'
-import { getSupabase } from '~/lib/supabaseClient'
 
 export interface ChatMessage {
   role: 'user' | 'agent'
   text: string
   timestamp: string
-  tasks?: { id: string; title: string; status: string }[]
 }
+export interface Conversation {
+  id: string
+  title: string
+  updatedAt: string
+}
+
+// ── Shared state (module-level) ──────────────────────────────────────────────
+const conversations = ref<Conversation[]>([])
+const currentId = ref<string | null>(null)
+const messages = ref<ChatMessage[]>([])
+const isLoading = ref(false)      // đang gửi tin
+const isLoadingList = ref(false)  // đang tải danh sách/tin
+const error = ref<string | null>(null)
 
 export function useAgentChat() {
   const { currentUser } = useAuth()
   const { apiGatewayUrl } = useConfig()
 
-  const messages = ref<ChatMessage[]>([])
-  const isLoading = ref(false)
-  const sessionId = ref<string>('')
-  const error = ref<string | null>(null)
+  function uid() { return currentUser.value?.id ?? '' }
 
-  // Generate a stable session ID per user
-  function ensureSessionId() {
-    if (!sessionId.value) {
-      sessionId.value = `session-${currentUser.value?.id ?? 'anon'}-${Date.now()}`
-    }
+  async function loadConversations() {
+    if (!uid()) return
+    isLoadingList.value = true
+    try {
+      const { data, error: e } = await getSupabase()
+        .from('agent_conversations')
+        .select('id, title, updated_at')
+        .order('updated_at', { ascending: false })
+      if (e) throw e
+      conversations.value = (data || []).map((r: any) => ({ id: r.id, title: r.title, updatedAt: r.updated_at }))
+    } catch (e: any) { error.value = e?.message || 'Không tải được danh sách hội thoại' }
+    finally { isLoadingList.value = false }
   }
 
-  // ── Send message to Bedrock Agent ──────────────────────────────────────
-  async function sendMessage(inputText: string): Promise<void> {
-    if (!inputText.trim()) return
+  async function selectConversation(id: string) {
+    currentId.value = id
+    error.value = null
+    isLoadingList.value = true
+    try {
+      const { data, error: e } = await getSupabase()
+        .from('agent_messages')
+        .select('role, content, created_at')
+        .eq('conversation_id', id)
+        .order('created_at', { ascending: true })
+      if (e) throw e
+      messages.value = (data || []).map((r: any) => ({ role: r.role, text: r.content, timestamp: r.created_at }))
+    } catch (e: any) { error.value = e?.message || 'Không tải được tin nhắn' }
+    finally { isLoadingList.value = false }
+  }
 
-    ensureSessionId()
+  // Bắt đầu đoạn chat mới (chưa ghi DB — tạo khi gửi tin đầu tiên).
+  function newConversation() {
+    currentId.value = null
+    messages.value = []
+    error.value = null
+  }
+
+  async function deleteConversation(id: string) {
+    try {
+      const { error: e } = await getSupabase().from('agent_conversations').delete().eq('id', id)
+      if (e) throw e
+      conversations.value = conversations.value.filter(c => c.id !== id)
+      if (currentId.value === id) newConversation()
+    } catch (e: any) { error.value = e?.message || 'Không xóa được hội thoại' }
+  }
+
+  async function _insertMessage(conversationId: string, role: 'user' | 'agent', content: string) {
+    await getSupabase().from('agent_messages').insert({ conversation_id: conversationId, user_id: uid(), role, content })
+  }
+
+  async function _touchConversation(id: string) {
+    // Bump updated_at để đưa hội thoại lên đầu danh sách (trigger set_updated_at cũng cập nhật).
+    await getSupabase().from('agent_conversations').update({ updated_at: new Date().toISOString() }).eq('id', id)
+    const idx = conversations.value.findIndex(c => c.id === id)
+    if (idx > 0) { const [c] = conversations.value.splice(idx, 1); conversations.value.unshift(c) }
+  }
+
+  async function sendMessage(inputText: string): Promise<void> {
+    const text = inputText.trim()
+    if (!text || isLoading.value) return
     isLoading.value = true
     error.value = null
 
-    // Add user message
-    messages.value.push({
-      role: 'user',
-      text: inputText,
-      timestamp: new Date().toISOString(),
-    })
-
+    // 1) Đảm bảo có conversation (tạo nếu là tin đầu).
+    let convId = currentId.value
     try {
-      if (!apiGatewayUrl.value) {
-        throw new Error('AI agent backend is not configured (API Gateway URL missing).')
+      if (!convId) {
+        const title = text.slice(0, 60)
+        const { data, error: e } = await getSupabase()
+          .from('agent_conversations').insert({ user_id: uid(), title }).select('id, title, updated_at').single()
+        if (e) throw e
+        convId = (data as any).id
+        currentId.value = convId
+        conversations.value.unshift({ id: (data as any).id, title: (data as any).title, updatedAt: (data as any).updated_at })
       }
-      // Supabase access_token thật (ES256) — backend agent-bff verify token này rồi
-      // tự lấy userId từ đó. KHÔNG gửi userId trong body (client không tự khai identity).
+    } catch (e: any) {
+      error.value = e?.message || 'Không tạo được hội thoại'
+      isLoading.value = false
+      return
+    }
+
+    // 2) Lưu + hiển thị tin user.
+    messages.value.push({ role: 'user', text, timestamp: new Date().toISOString() })
+    _insertMessage(convId!, 'user', text).catch(() => {})
+
+    // 3) Gọi agent-bff.
+    try {
+      if (!apiGatewayUrl.value) throw new Error('AI agent backend chưa cấu hình (NUXT_PUBLIC_API_GATEWAY_URL).')
       const { data: { session } } = await getSupabase().auth.getSession()
       if (!session?.access_token) throw new Error('Phiên đăng nhập đã hết hạn — đăng nhập lại.')
 
-      // Call the real Bedrock Agent via API Gateway.
-      const response = await $fetch<{
-        responseText: string
-        tasks?: { id: string; title: string; status: string }[]
-        followUpQuestions?: string[]
-        actionTaken?: string
-      }>(`${apiGatewayUrl.value}/agent/chat`, {
+      const response = await $fetch<{ responseText: string }>(`${apiGatewayUrl.value}/agent/chat`, {
         method: 'POST',
-        body: {
-          sessionId: sessionId.value,
-          inputText,
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        body: { sessionId: convId, inputText: text },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       })
 
-      const agentText = response.followUpQuestions?.length
-        ? response.responseText + '\n\n' + response.followUpQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')
-        : response.responseText
-
-      messages.value.push({
-        role: 'agent',
-        text: agentText,
-        timestamp: new Date().toISOString(),
-        tasks: response.tasks,
-      })
+      const agentText = response.responseText || '(không có nội dung)'
+      messages.value.push({ role: 'agent', text: agentText, timestamp: new Date().toISOString() })
+      _insertMessage(convId!, 'agent', agentText).catch(() => {})
+      _touchConversation(convId!).catch(() => {})
     } catch (e: any) {
-      // Ưu tiên message thân thiện từ backend (agent-bff trả {message}); phân biệt 429 (quá tải).
       const status = e?.statusCode ?? e?.response?.status
       const backendMsg = e?.data?.message
-      let text: string
-      if (status === 429) {
-        text = backendMsg || 'Hệ thống AI đang quá tải, vui lòng thử lại sau vài giây.'
-      } else if (backendMsg) {
-        text = backendMsg
-      } else {
-        text = 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.'
-      }
+      let text2: string
+      if (status === 429) text2 = backendMsg || 'Hệ thống AI đang quá tải hoặc bạn đã hết lượt hôm nay. Thử lại sau.'
+      else if (backendMsg) text2 = backendMsg
+      else text2 = 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.'
       error.value = backendMsg || e?.message || 'Agent communication failed'
-      messages.value.push({
-        role: 'agent',
-        text,
-        timestamp: new Date().toISOString(),
-      })
+      // Hiển thị lỗi (không lưu DB để không làm bẩn lịch sử).
+      messages.value.push({ role: 'agent', text: text2, timestamp: new Date().toISOString() })
     } finally {
       isLoading.value = false
     }
   }
 
-  // ── Clear chat history ─────────────────────────────────────────────────
-  function clearChat() {
-    messages.value = []
-    sessionId.value = ''
-    error.value = null
-  }
-
   return {
-    messages,
-    isLoading,
-    sessionId,
-    error,
-    sendMessage,
-    clearChat,
+    conversations, currentId, messages, isLoading, isLoadingList, error,
+    loadConversations, selectConversation, newConversation, deleteConversation, sendMessage,
   }
 }

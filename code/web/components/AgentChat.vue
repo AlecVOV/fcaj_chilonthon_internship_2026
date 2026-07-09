@@ -40,18 +40,6 @@
         >
           <p class="whitespace-pre-wrap">{{ msg.text }}</p>
 
-          <!-- Task cards created by agent -->
-          <div v-if="msg.tasks?.length" class="mt-2 space-y-1">
-            <div
-              v-for="task in msg.tasks"
-              :key="task.id"
-              class="rounded-md border border-hairline dark:border-hairline-dark bg-canvas dark:bg-surface-dark-elevated px-2.5 py-2 text-sm"
-            >
-              <p class="font-medium text-ink dark:text-on-dark">{{ task.title }}</p>
-              <p class="mt-0.5 text-ink-soft dark:text-on-dark-soft">Status: {{ task.status }}</p>
-            </div>
-          </div>
-
           <p class="mt-1 text-2xs opacity-40 text-right">
             {{ new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
           </p>
@@ -95,7 +83,7 @@
 <script setup lang="ts">
 import { useAgentChat } from '~/composables/useAgentChat'
 
-const { messages, isLoading, error, sendMessage, clearChat } = useAgentChat()
+const { messages, isLoading, error, sendMessage } = useAgentChat()
 
 const inputText = ref('')
 const inputEl = ref<HTMLInputElement>()

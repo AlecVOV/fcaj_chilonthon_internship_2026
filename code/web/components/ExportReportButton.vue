@@ -35,7 +35,7 @@ const emit = defineEmits<{
   done: []
 }>()
 
-const { isExporting, exportError, exportResult, exportReport } = useReportExport()
+const { isExporting, exportError, lastMessage, downloadReport } = useReportExport()
 
 const showToast = ref(false)
 const toastType = ref<'loading' | 'success' | 'error'>('loading')
@@ -47,12 +47,11 @@ async function handleExport() {
   showToast.value = true; toastType.value = 'loading'
   toastMessage.value = 'Generating report...'; toastDetail.value = ''
 
-  await exportReport()
+  await downloadReport() // hôm nay
   if (exportError.value) {
     toastType.value = 'error'; toastMessage.value = 'Export failed'; toastDetail.value = exportError.value
   } else {
-    toastType.value = 'success'; toastMessage.value = exportResult.value?.message || 'Report ready'
-    toastDetail.value = exportResult.value?.pdfUrl ? 'PDF opened in new tab' : '.md file downloaded'
+    toastType.value = 'success'; toastMessage.value = lastMessage.value || 'Report ready'; toastDetail.value = ''
   }
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => { showToast.value = false }, 4000)

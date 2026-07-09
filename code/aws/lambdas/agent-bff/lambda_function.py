@@ -17,8 +17,12 @@ CHỐNG SESSION HIJACK: sessionId LUÔN được namespace theo user_id
 CHỐNG DoS/cost: cap độ dài inputText (MAX_INPUT). Nên thêm API Gateway throttling
   + WAF rate-based ở tầng hạ tầng (xem aws/bedrock/DEPLOY-cmd.md).
 
+GIỚI HẠN LƯỢT/NGÀY: trước khi gọi Bedrock, gọi RPC bump_agent_usage(AGENT_DAILY_LIMIT)
+  (Supabase, SECURITY DEFINER) — vượt hạn -> 429. Fail-open nếu RPC lỗi (không chặn nhầm user).
+
 Env: BEDROCK_AGENT_ID, BEDROCK_AGENT_ALIAS_ID, SUPABASE_URL, SUPABASE_ANON_KEY,
-     ALLOWED_ORIGINS (CSV domain, optional — mặc định '*').
+     ALLOWED_ORIGINS (CSV domain, optional — mặc định '*'),
+     AGENT_DAILY_LIMIT (số lượt AI/user/ngày, mặc định 20).
 """
 
 import base64
@@ -37,6 +41,7 @@ SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', '').split(',') if o.strip()]
 MAX_INPUT = 4000
+AGENT_DAILY_LIMIT = int(os.environ.get('AGENT_DAILY_LIMIT', '20'))
 
 bedrock = boto3.client('bedrock-agent-runtime', region_name=REGION)
 
@@ -116,11 +121,28 @@ def _verify_user(event):
     return sub
 
 
+def _bump_usage(token):
+    """Tăng đếm lượt/ngày qua RPC SECURITY DEFINER. Trả count sau tăng (>0) hoặc -1 nếu vượt hạn.
+    Fail-open (trả 0) nếu RPC lỗi — không chặn nhầm user vì sự cố tạm thời."""
+    url = f'{SUPABASE_URL}/rest/v1/rpc/bump_agent_usage'
+    data = json.dumps({'p_limit': AGENT_DAILY_LIMIT}).encode()
+    req = urllib.request.Request(url, data=data, method='POST', headers={
+        'apikey': SUPABASE_ANON_KEY, 'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json', 'Accept': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return int(json.loads(r.read().decode()))
+    except Exception as e:  # noqa: BLE001
+        print(f'WARN bump_agent_usage failed (fail-open): {e}')
+        return 0
+
+
 def handler(event, context):
     if _method(event) == 'OPTIONS':
         return _resp(200, {'ok': True}, event)
     try:
         user_id = _verify_user(event)
+        token = _header(event, 'authorization')[7:].strip()  # đã validate 'Bearer ' trong _verify_user
 
         body = json.loads(event.get('body') or '{}')
         input_text = (body.get('inputText') or '').strip()
@@ -128,6 +150,10 @@ def handler(event, context):
             return _resp(400, {'message': 'inputText là bắt buộc.'}, event)
         if len(input_text) > MAX_INPUT:
             return _resp(400, {'message': f'inputText quá dài (tối đa {MAX_INPUT} ký tự).'}, event)
+
+        # Giới hạn lượt AI/ngày (chống lạm dụng + tiết kiệm cost Bedrock).
+        if _bump_usage(token) < 0:
+            return _resp(429, {'message': f'Bạn đã dùng hết {AGENT_DAILY_LIMIT} lượt trợ lý AI hôm nay. Vui lòng quay lại vào ngày mai.'}, event)
 
         # sessionId LUÔN namespace theo user_id — client không đụng được session user khác.
         client_sid = re.sub(r'[^A-Za-z0-9_-]', '', str(body.get('sessionId', 'default')))[:64] or 'default'
