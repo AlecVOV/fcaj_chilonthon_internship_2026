@@ -132,18 +132,19 @@
 
         <!-- Buy Me a Coffee -->
         <div class="card text-center max-w-md mx-auto">
-          <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft mb-2">
-            Support the project
+          <p class="text-sm text-ink-body dark:text-on-dark-soft mb-4 leading-relaxed italic">
+            "Hello, help me pls. Me wan moni to buy nubs tee. Thank you and be chilled!!!<br />
+            From Chi Lon Thon with luv"
           </p>
-          <p class="text-sm text-ink-body dark:text-on-dark-soft mb-4 leading-relaxed">
-            If FCAJ Worklog Repository helps you stay focused, consider buying me a coffee.
-            It helps keep the servers running and the code improving.
+
+          <!-- Nub GIF -->
+          <img src="/nub.gif" alt="Nub" class="w-full rounded-lg mb-4" />
+
+          <!-- Banking account -->
+          <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft mb-3">
+            Banking account
           </p>
-          <a href="https://www.buymeacoffee.com/yourusername" target="_blank" rel="noopener"
-             class="inline-flex items-center gap-2 btn-primary text-base px-6 py-3">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Buy Me a Coffee
-          </a>
+          <img src="/me_bank.jpg" alt="Banking account" class="w-full rounded-lg" />
         </div>
       </div>
     </section>
