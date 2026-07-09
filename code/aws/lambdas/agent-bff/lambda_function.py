@@ -41,7 +41,7 @@ SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', '').split(',') if o.strip()]
 MAX_INPUT = 4000
-AGENT_DAILY_LIMIT = int(os.environ.get('AGENT_DAILY_LIMIT', '20'))
+AGENT_DAILY_LIMIT = int(os.environ.get('AGENT_DAILY_LIMIT', '2'))
 
 bedrock = boto3.client('bedrock-agent-runtime', region_name=REGION)
 
