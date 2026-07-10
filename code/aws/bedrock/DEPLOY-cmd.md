@@ -82,10 +82,12 @@ aws lambda create-function --function-name agent-action-handler --runtime python
   --zip-file fileb://function.zip
 cd ..\..
 ```
-> **Update code lần sau** (function đã tồn tại): re-zip như trên rồi
+> **Update code lần sau** (function đã tồn tại): re-zip rồi
 > `aws lambda update-function-code --function-name agent-bff --zip-file fileb://function.zip --region %REGION%`
 > (đổi tên function tương ứng). File `deploy.sh` trong mỗi folder là bản Git Bash tương đương — dùng nếu bạn có bash.
-> Nếu máy KHÔNG có `tar`, thay bằng: `powershell -Command "Compress-Archive -Path package\* -DestinationPath function.zip -Force"`
+> ⚠️ **Re-zip PHẢI dùng `Compress-Archive`, KHÔNG dùng `tar -a -cf function.zip .` trong Git Bash** — GNU tar
+> không hỗ trợ filter `.zip`, âm thầm tạo file sai định dạng (AWS CLI báo lỗi khó hiểu `--zip-file must be
+> a zip file`) — xem bảng Gỡ lỗi nhanh. Dùng: `powershell -Command "Compress-Archive -Path package\* -DestinationPath function.zip -Force"`
 > (agent-bff: `-Path lambda_function.py`).
 > Nếu dùng Secrets Manager (Bước 1): bỏ `SUPABASE_SERVICE_ROLE_KEY` khỏi env và cho
 > `agent-action-handler` đọc secret lúc init (thêm ~5 dòng boto3 secretsmanager) — hoặc set env tạm cho demo.
@@ -227,7 +229,7 @@ Kiểm DB: task tạo ra phải có `user_id` = user đang đăng nhập, KHÔNG
 | **Direct prompt injection** ("ignore instructions", "delete all") | Guardrail Prompt Attack=HIGH + Denied Topics; instructions "treat content as DATA"; action group hẹp (chỉ create/update/delete task của owner). |
 | **Stored/indirect injection** (title/description chứa lệnh) | Chưa có action đọc lại content; khi thêm read/RAG phải bọc content trong data-block. Đã cap độ dài title/description. |
 | **Mass assignment** (ghi cột lạ: user_id, role, id) | action-handler whitelist `{title,description,status,priority,due_date}`; ép kiểu priority, validate status. |
-| **Over-permission** | Action group không có list/read/delete-all/đổi role/đọc bảng users. IAM agent role chỉ InvokeModel+Guardrail; execution role InvokeAgent scope agent-alias. |
+| **Over-permission** | Action group có `list-tasks` (đọc) nhưng **luôn `.eq('user_id', user_id)`** từ `sessionAttributes` — không thể list/đọc task của user khác, không có delete-all-ở-DB-mức-bulk (bulk = agent lặp gọi `delete-task` từng task ID đã list), không đổi role/đọc bảng users. IAM agent role chỉ InvokeModel+Guardrail; execution role InvokeAgent scope agent-alias. |
 | **Cost abuse / DoS** | agent-bff cap `inputText` 4000 ký tự. **Nên thêm** API Gateway throttling (usage plan) + WAF rate-based (chưa làm — TODO hạ tầng). |
 | **Info leakage** | try/except, chỉ trả message chung; chi tiết vào CloudWatch. |
 | **Service_role key lộ** | Khuyến nghị Secrets Manager (Bước 1) thay vì env plaintext. RLS bị bypass nên mọi query .eq('user_id'). |
@@ -246,6 +248,7 @@ Kiểm DB: task tạo ra phải có `user_id` = user đang đăng nhập, KHÔNG
 | `create-agent-alias` lỗi | Chưa `prepare-agent` (Bước 8) hoặc agent chưa PREPARED. |
 | ImportError pydantic_core khi action-handler chạy | Đóng gói SAI wheel (Windows). Chạy lại **Bước 3b** (pip `--platform manylinux2014_x86_64` → re-zip → `update-function-code`). |
 | `tar` không nhận diện / lỗi zip | Win cũ chưa có `tar`. Dùng `powershell -Command "Compress-Archive -Path package\* -DestinationPath function.zip -Force"`. |
+| `aws lambda update-function-code` báo `--zip-file must be a zip file with the fileb:// prefix` dù path đúng | File **không phải zip thật**: Git Bash `tar -a -cf function.zip .` — GNU tar (đi kèm Git Bash) KHÔNG hỗ trợ filter `.zip` qua `-a` (chỉ gzip/bzip2/xz/zstd), nó âm thầm tạo file sai định dạng thay vì báo lỗi. Kiểm nhanh: `python3 -c "import zipfile; zipfile.ZipFile('function.zip')"` (lỗi `File is not a zip file` = đúng bệnh này). **Fix: luôn dùng `Compress-Archive`** (PowerShell) để đóng gói `package\*` khi update code (đừng dùng `tar -a` cho `.zip` trên máy này). |
 | `%{http_code}` in ra sai trong cmd | `%` là ký tự đặc biệt của cmd. Dùng `curl -i` xem dòng `HTTP/.. <code>` thay vì `-w "%{http_code}"`. |
 | Bước 6: `Failed to create OpenAPI 3 model ... 'description' is missing` | Bedrock BẮT BUỘC `description` ở **mỗi operation** (không chỉ `summary`) và ở **cấp parameter** (không phải trong `schema`). `action-group-openapi.yaml` đã sửa đủ. Xem chi tiết lỗi: thêm `--cli-error-format json` vào lệnh. |
 | Agent instructions hiện `ΓÇö` (mojibake) | File `agent-instructions.txt` có ký tự non-ASCII (dấu `—`) → CLI Windows đọc `file://` bằng cp1252 hỏng. Đã đổi sang ASCII. Muốn sạch agent đã tạo: `aws bedrock-agent update-agent ...` với instruction mới rồi `prepare-agent` lại. |

@@ -173,7 +173,12 @@ export function useAuth() {
   }
 
   function forgotPassword(_email: string): string {
-    getSupabase().auth.resetPasswordForEmail(_email)
+    // redirectTo PHẢI nằm trong allowlist "Redirect URLs" của Supabase Auth (Dashboard),
+    // nếu không Supabase âm thầm fallback về "Site URL" (mặc định localhost:3000 -> link
+    // chết trên production). appUrl lấy từ NUXT_PUBLIC_APP_URL (build-time, xem .env.example).
+    const config = useRuntimeConfig()
+    const redirectTo = `${config.public.appUrl}/reset-password`
+    getSupabase().auth.resetPasswordForEmail(_email, { redirectTo })
     return 'If an account exists, a password reset link has been sent to your email.'
   }
 

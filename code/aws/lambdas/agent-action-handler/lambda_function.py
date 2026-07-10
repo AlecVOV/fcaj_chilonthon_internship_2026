@@ -30,6 +30,7 @@ ALLOWED_WRITE = {'title', 'description', 'status', 'priority'}
 VALID_STATUS = {'pending', 'in_progress', 'completed', 'cancelled'}
 MAX_TITLE = 200
 MAX_DESC = 2000
+MAX_LIST = 50  # cap payload tra ve model -> tranh phinh prompt / cost khi user co nhieu task
 
 
 class BadInput(Exception):
@@ -91,6 +92,8 @@ def handler(event, context):
 
     params = _params(event)
     try:
+        if api_path == '/list-tasks' and http_method == 'GET':
+            return _list(event, user_id, params)
         if api_path == '/create-task' and http_method == 'POST':
             return _create(event, user_id, params)
         if api_path == '/update-task' and http_method == 'PUT':
@@ -103,6 +106,20 @@ def handler(event, context):
     except Exception as e:  # noqa: BLE001
         print(f'ERROR action-handler: {e}')
         return _response(event, 500, 'Lỗi nội bộ khi thao tác task.')
+
+
+def _list(event, user_id, params):
+    """Read-only, luon .eq('user_id', user_id) -- chi tra task cua chinh user dang dang nhap
+    (khong phai list toan bo bang). Model dung ket qua nay de tim taskId theo title truoc
+    khi goi update/delete, thay vi tu bia id."""
+    status = params.get('status')
+    q = supabase.table('tasks').select('id,title,status,priority,due_date').eq('user_id', user_id)
+    if status in VALID_STATUS:
+        q = q.eq('status', status)
+    rows = q.order('created_at', desc=True).limit(MAX_LIST).execute().data or []
+    tasks = [{'id': r['id'], 'title': r['title'], 'status': r['status'],
+              'priority': r.get('priority', 0), 'dueDate': r.get('due_date') or ''} for r in rows]
+    return _response(event, 200, f'Tim thay {len(tasks)} task.', extra={'tasks': tasks})
 
 
 def _create(event, user_id, params):
@@ -146,8 +163,12 @@ def _delete(event, user_id, params):
     return _response(event, 200, 'Đã xóa task.')
 
 
-def _response(event, code, message):
-    """Trả đúng apiPath/httpMethod/actionGroup của request (không hardcode create-task)."""
+def _response(event, code, message, extra=None):
+    """Trả đúng apiPath/httpMethod/actionGroup của request (không hardcode create-task).
+    `extra` (vd {'tasks': [...]})  được gộp thêm vào body cho /list-tasks."""
+    body = {'message': message, 'status': 'success' if code == 200 else 'error'}
+    if extra:
+        body.update(extra)
     return {
         'messageVersion': '1.0',
         'response': {
@@ -155,7 +176,6 @@ def _response(event, code, message):
             'apiPath': event.get('apiPath', '/create-task'),
             'httpMethod': event.get('httpMethod', 'POST'),
             'httpStatusCode': code,
-            'responseBody': {'application/json': {'body': json.dumps(
-                {'message': message, 'status': 'success' if code == 200 else 'error'})}},
+            'responseBody': {'application/json': {'body': json.dumps(body)}},
         },
     }

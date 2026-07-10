@@ -19,6 +19,8 @@
     "@supabase/supabase-js": "^2.46.0",
     "@vueuse/core": "^11.2.0",
     "dayjs": "^1.11.13",
+    "dompurify": "^3.4.11",
+    "marked": "^18.0.6",
     "pinia": "^2.2.6"
   },
   "devDependencies": {

@@ -48,7 +48,7 @@ HF_API_TOKEN={{YOUR_HUGGINGFACE_API_TOKEN}}
 # APP CONFIG (public)
 # ---------------------------------------------------------------------------
 NUXT_PUBLIC_APP_NAME=Focus Mode
-NUXT_PUBLIC_APP_URL=https://focusmode.app
+NUXT_PUBLIC_APP_URL=https://focusmode.click
 NUXT_PUBLIC_SUPPORT_EMAIL=support@{{YOUR_DOMAIN}}
 
 # ---------------------------------------------------------------------------

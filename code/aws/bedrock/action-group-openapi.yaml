@@ -5,6 +5,55 @@ info:
   version: "1.0"
 
 paths:
+  /list-tasks:
+    get:
+      summary: List the current user's tasks
+      description: List tasks owned by the current authenticated user, optionally filtered by status. Use this BEFORE update/delete to find a task's id by title, or to answer bulk requests like "delete all pending tasks".
+      operationId: listTasks
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: "Optional filter: pending, in_progress, completed, or cancelled. Omit to list tasks of all statuses."
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, cancelled]
+      responses:
+        "200":
+          description: Matching tasks for the current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Human-readable result message
+                  status:
+                    type: string
+                    description: "success or error"
+                  tasks:
+                    type: array
+                    description: Matching tasks owned by the current user
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Task UUID (use this for update/delete)
+                        title:
+                          type: string
+                          description: Task title
+                        status:
+                          type: string
+                          description: Task status
+                        priority:
+                          type: integer
+                          description: "0=none, 1=low, 2=medium, 3=high"
+                        dueDate:
+                          type: string
+                          description: Due date in YYYY-MM-DD format, or empty if none
+
   /create-task:
     post:
       summary: Create a new task

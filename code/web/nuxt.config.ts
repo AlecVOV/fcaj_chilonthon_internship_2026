@@ -34,6 +34,7 @@ export default defineNuxtConfig({
     '/calendar': { ssr: false },
     '/agent': { ssr: false },
     '/profile': { ssr: false },
+    '/reset-password': { ssr: false },
     '/author': { ssr: false },
     '/admin': { ssr: false },
     '/admin/**': { ssr: false },

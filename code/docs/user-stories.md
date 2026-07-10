@@ -17,7 +17,7 @@
 | US-AUTH-01 | P0 | As a **new user**, I want to **request access with email/password** so that I can create my account. | "Request Access" tab; account created in Supabase Auth; trigger `handle_new_user()` creates `public.users` row with `status='pending'`; user must wait for admin approval before sign-in. | ✅ |
 | US-AUTH-02 | P0 | As a **registered user**, I want to **sign in with email/password** so that I can access my focus data. | "Sign In" tab; JWT session established by Supabase Auth; only `status='approved'` users may proceed (pending/rejected are blocked, admins always allowed); cloud data loaded from Supabase. | ✅ |
 | US-AUTH-03 | P0 | As a **user**, I want my **session to persist across browser restarts** so that I don't need to log in every time. | `persistSession: true` in Supabase config + a lightweight `focus_auth_user` localStorage snapshot; on app start `syncSession()` re-validates role/status with the DB and force-logs-out demoted/rejected/expired accounts. | ✅ |
-| US-AUTH-04 | P1 | As a **user**, I want to **reset my password** so that I can recover access if I forget it. | "Forgot Password" link; Supabase `resetPasswordForEmail` sends a reset email. | ✅ |
+| US-AUTH-04 | P1 | As a **user**, I want to **reset my password** so that I can recover access if I forget it. | "Forgot Password" link; `resetPasswordForEmail(email, { redirectTo: appUrl + '/reset-password' })`; dedicated `pages/reset-password.vue` parses the `#access_token/refresh_token/type=recovery` hash, calls `setSession()` then `updateUser({password})`. Requires Supabase Dashboard → Auth → URL Configuration to allowlist `<appUrl>/reset-password` (Redirect URLs) — see `docs/PROJECT_STATE.md`. | ✅ |
 
 ---
 
