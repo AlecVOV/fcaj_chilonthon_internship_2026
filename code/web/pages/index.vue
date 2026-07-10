@@ -5,7 +5,7 @@
          ═══════════════════════════════════════════ -->
     <section class="flex flex-col items-center text-center py-20 md:py-28 px-4">
       <span class="inline-flex items-center rounded-pill bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-6">
-        Now in beta
+        ver 1.0.0 demo use only — <NuxtLink to="/login" class="underline">Request access</NuxtLink>
       </span>
       <h1 class="font-display text-display-xl md:text-[4rem] text-ink dark:text-on-dark max-w-4xl leading-none">
         Deep focus,<br />powered by AI
