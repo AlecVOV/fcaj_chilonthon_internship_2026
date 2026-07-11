@@ -1,10 +1,18 @@
 # IAM — Identity & Access Management
 
+> ⚠️ **Role names thực tế KHÁC ví dụ generic dưới đây** (đã tạo theo `bedrock/DEPLOY-cmd.md`):
+> - `focus-ai-lambda-role` — execution role cho `agent-bff` + `agent-action-handler` (policy =
+>   `lambda-execution-role.json` trong folder này).
+> - `ambient-audio-manager-role` — execution role riêng cho `ambient-audio-manager`.
+> - `AmazonBedrockExecutionRoleForAgents_task` — **agent service role** (Bedrock assume để gọi
+>   model + guardrail), policy nằm ở `../bedrock/agent-permissions-policy.json`, KHÔNG phải
+>   file trong folder này. Sửa policy này thì dùng `aws/UPDATE-guide.md` mục 8.
+
 ## What this folder contains
 
-`lambda-execution-role.json` — IAM policy for the Lambda execution role.
+`lambda-execution-role.json` — IAM policy cho Lambda execution role (`focus-ai-lambda-role`).
 
-## Setup
+## Setup (ví dụ generic — xem role thật ở cảnh báo trên)
 
 ### 1. Create IAM Role
 ```bash

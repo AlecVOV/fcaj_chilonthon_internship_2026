@@ -31,15 +31,13 @@ Chờ Access = *Granted* (có thể mất vài phút — subscription marketplac
 > **Thực tế account này (2026-07-08):** Haiku 3 **CHƯA** có access; **Sonnet 3.5** (`anthropic.claude-3-5-sonnet-20240620-v1:0`) và **Haiku 4.5** (`global.anthropic.claude-haiku-4-5-20251001-v1:0`) thì CÓ → runbook dùng **Sonnet 3.5**.
 > Một số model cần gọi qua **inference profile** (`apac.anthropic.*` / `global.anthropic.*`); nếu model-id trần lỗi thì dùng profile id.
 
-## Bước 1 — Secrets Manager cho service_role key (khuyến nghị)
+## Bước 1 — (bỏ qua) Service role key để plaintext env
 
-`agent-action-handler` cần `SUPABASE_SERVICE_ROLE_KEY` (bypass RLS). ĐỪNG để plaintext env.
-```bat
-aws secretsmanager create-secret --name focus-mode/supabase-service-role --region %REGION% --secret-string "PASTE_SERVICE_ROLE_KEY"
-```
-> Lấy key: Supabase → Project Settings → API → **service_role** (secret). Nếu muốn đi nhanh
-> cho demo thì có thể set thẳng env ở Bước 3 và bỏ qua Secrets Manager — nhưng ghi rõ rủi ro.
-> IAM execution role đã có sẵn `secretsmanager:GetSecretValue` trên `secret:focus-mode/*`.
+Đã cân nhắc dùng Secrets Manager cho `SUPABASE_SERVICE_ROLE_KEY` nhưng **quyết định KHÔNG
+làm** — project này scope nhỏ (demo/presentation cho AWS FCAJ bootcamp, không public
+commercial), Secrets Manager là over-engineering không cần thiết cho quy mô này.
+`agent-action-handler` set thẳng `SUPABASE_SERVICE_ROLE_KEY` ở env Lambda (Bước 3b) như bình
+thường. Nếu sau này scale lên nhiều user thật thì đây là việc đáng làm lại.
 
 ## Bước 2 — IAM roles
 
@@ -89,8 +87,6 @@ cd ..\..
 > không hỗ trợ filter `.zip`, âm thầm tạo file sai định dạng (AWS CLI báo lỗi khó hiểu `--zip-file must be
 > a zip file`) — xem bảng Gỡ lỗi nhanh. Dùng: `powershell -Command "Compress-Archive -Path package\* -DestinationPath function.zip -Force"`
 > (agent-bff: `-Path lambda_function.py`).
-> Nếu dùng Secrets Manager (Bước 1): bỏ `SUPABASE_SERVICE_ROLE_KEY` khỏi env và cho
-> `agent-action-handler` đọc secret lúc init (thêm ~5 dòng boto3 secretsmanager) — hoặc set env tạm cho demo.
 
 ## Bước 4 — Guardrail (BẮT BUỘC cho production — chống prompt injection)
 
@@ -230,9 +226,9 @@ Kiểm DB: task tạo ra phải có `user_id` = user đang đăng nhập, KHÔNG
 | **Stored/indirect injection** (title/description chứa lệnh) | Chưa có action đọc lại content; khi thêm read/RAG phải bọc content trong data-block. Đã cap độ dài title/description. |
 | **Mass assignment** (ghi cột lạ: user_id, role, id) | action-handler whitelist `{title,description,status,priority,due_date}`; ép kiểu priority, validate status. |
 | **Over-permission** | Action group có `list-tasks` (đọc) nhưng **luôn `.eq('user_id', user_id)`** từ `sessionAttributes` — không thể list/đọc task của user khác, không có delete-all-ở-DB-mức-bulk (bulk = agent lặp gọi `delete-task` từng task ID đã list), không đổi role/đọc bảng users. IAM agent role chỉ InvokeModel+Guardrail; execution role InvokeAgent scope agent-alias. |
-| **Cost abuse / DoS** | agent-bff cap `inputText` 4000 ký tự. **Nên thêm** API Gateway throttling (usage plan) + WAF rate-based (chưa làm — TODO hạ tầng). |
+| **Cost abuse / DoS** | agent-bff cap `inputText` 4000 ký tự + `AGENT_DAILY_LIMIT` lượt/user/ngày. API Gateway throttling/WAF **KHÔNG làm** — scope hiện tại là demo bootcamp, không public commercial cho nhiều user; cân nhắc lại khi scale app lên >100 user thật. |
 | **Info leakage** | try/except, chỉ trả message chung; chi tiết vào CloudWatch. |
-| **Service_role key lộ** | Khuyến nghị Secrets Manager (Bước 1) thay vì env plaintext. RLS bị bypass nên mọi query .eq('user_id'). |
+| **Service_role key lộ** | Đang set plaintext env Lambda (Secrets Manager không làm — scope nhỏ, xem Bước 1). RLS bị bypass nên mọi query .eq('user_id'). |
 
 ## Gỡ lỗi nhanh
 

@@ -5,21 +5,19 @@ info:
   description: |
     Routes frontend requests to Lambda functions.
 
-    ⚠️ AUTH — QUAN TRỌNG: access_token Supabase của project này ký ES256 (asymmetric
-    signing keys). JWT authorizer NATIVE của HTTP API chỉ hỗ trợ RS256 → KHÔNG verify
-    được token ES256. Vì vậy block x-amazon-apigateway-authorizer bên dưới KHÔNG được
-    dùng cho deploy thật; auth được thực hiện TRONG từng Lambda (lấy Bearer token, gọi
-    Supabase PostgREST verify + RLS) — pattern đã chạy thật ở ambient-audio-manager và
-    agent-bff. Với route admin (/admin/vectorize) thì Lambda tự check role='admin'.
+    AUTH — KHÔNG dùng JWT authorizer của API Gateway: access_token Supabase của project
+    này ký ES256 (asymmetric), JWT authorizer NATIVE của HTTP API chỉ hỗ trợ RS256 → sẽ
+    từ chối mọi request hợp lệ. Auth thực hiện TRONG từng Lambda (lấy Bearer token, gọi
+    Supabase PostgREST verify + RLS) — pattern đã chạy thật ở ambient-audio-manager,
+    agent-bff, agent-action-handler. Route admin (/admin/vectorize) thì Lambda tự check
+    role='admin'. Không có securityScheme/authorizer nào trong file này — đừng thêm lại
+    kiểu JWT authorizer, nó không hoạt động với token ES256 của project này.
 
-    Trạng thái deploy: chỉ 2 route /ambient/* đang chạy (HTTP API ffepnb6gei, route
-    $default -> ambient-audio-manager, KHÔNG authorizer). Các route còn lại là spec đích.
+    Trạng thái deploy: /agent/chat + 2 route /ambient/* đang chạy thật (HTTP API
+    ffepnb6gei). Các route còn lại (/emotion, /rag, /admin) là spec đích, CHƯA deploy.
 
 servers:
   - url: https://${API_ID}.execute-api.ap-southeast-1.amazonaws.com/prod
-
-security:
-  - jwtAuth: []
 
 paths:
   /agent/chat:
@@ -79,35 +77,6 @@ paths:
                 properties:
                   emotion_label: { type: string }
                   confidence: { type: number }
-
-  /report:
-    post:
-      summary: Generate daily Markdown report
-      operationId: generateReport
-      x-amazon-apigateway-integration:
-        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:focus-report-generator/invocations
-        httpMethod: POST
-        type: aws_proxy
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                user_id: { type: string }
-                date: { type: string, format: date }
-                send_email: { type: boolean }
-      responses:
-        '200':
-          description: Report generated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  markdown_url: { type: string }
-                  pdf_url: { type: string }
-                  email_sent: { type: boolean }
 
   /rag/recommend:
     post:
@@ -208,15 +177,3 @@ paths:
                         url: { type: string }
                         size: { type: integer }
                         lastModified: { type: string }
-
-components:
-  securitySchemes:
-    jwtAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      x-amazon-apigateway-authorizer:
-        type: jwt
-        jwtConfiguration:
-          issuer: https://${SUPABASE_PROJECT}.supabase.co/auth/v1
-          audience: [authenticated]

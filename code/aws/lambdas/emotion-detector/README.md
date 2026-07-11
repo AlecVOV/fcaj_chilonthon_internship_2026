@@ -1,5 +1,11 @@
 # Emotion Detector — Lambda Function
 
+> ⚪ **README only, chưa code.** Frontend hiện tại (`web/composables/useEmotionDetector.ts`)
+> dùng **fallback keyword-regex thuần client** (đoán "stress"/"tired"/"relax"/... trong text)
+> khi `NUXT_PUBLIC_EMOTION_API_URL` rỗng — **KHÔNG phải AI**, không liên quan Bedrock/Haiku.
+> Bedrock Agent (Haiku 4.5) hiện chỉ dùng cho Task Assistant, không dùng cho emotion detection.
+> Kế hoạch ONNX Lambda dưới đây vẫn giữ nguyên, chưa triển khai.
+
 **Purpose:** Analyze post-focus journal text using distilbert-base-uncased-emotion
 (ONNX quantized). Returns one of 5 emotion labels with confidence score.
 

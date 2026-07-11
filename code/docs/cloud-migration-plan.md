@@ -210,8 +210,10 @@ Tầng AI dự kiến gồm các Lambda sau. Trạng thái hiện tại:
 | `agent-action-handler` | ✅ Có code (Python) | Action group cho Bedrock Agent: create/update/delete task trong Supabase |
 | `emotion-detector` | ⚠️ Chỉ README | Nhận diện cảm xúc journal (focused/stressed/exhausted/relaxed/unmotivated) |
 | `rag-recommender` | ⚠️ Chỉ README | Gợi ý nội dung qua pgvector (`search_similar_content`, model all-MiniLM-L6-v2, 384 chiều) |
-| `report-generator` | ⚠️ Chỉ README | Xuất report (server-side) |
 | `admin-vectorizer` | ⚠️ Chỉ README | Tạo embedding cho media_library |
+
+> `report-generator` đã bị bỏ khỏi kế hoạch (2026-07-10) — xuất report giờ chạy thuần
+> client-side, không qua Lambda. Xem `docs/PROJECT_STATE.md` mục 23.
 
 Layers (`onnx-transformers`, `sentence-transformers`): mới chỉ có spec.
 
@@ -219,7 +221,7 @@ Frontend đã sẵn sàng tích hợp:
 - Agent chat: `useAgentChat` → `POST {API}/agent/chat`. Chưa cấu hình URL → báo lỗi (không có mock).
 - Emotion: `useEmotionDetector` gọi `/emotion` nếu có API, nếu không fallback regex client-side.
 - RAG: `useRAG` gọi `/rag` nếu có, nếu không fallback hardcode.
-- Report: `useReportExport` gọi `/report` nếu có, nếu không tải `.md` ngay tại client.
+- Report: `useReportExport` **luôn** render + tải `.md` ngay tại client (đổi 2026-07-10, không còn gọi API nào).
 
 Quy trình build/deploy một Lambda đã có code (ví dụ `agent-bff`): cài requirements, đóng gói zip, upload (Python 3.12), gắn biến môi trường (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, ...). Chỉ có vài `deploy.sh` lẻ cho 2 Lambda đã có code; CHƯA có IaC chung.
 
@@ -240,7 +242,6 @@ Khi deploy:
    - `POST /agent/chat` → `agent-bff`
    - `POST /emotion` → `emotion-detector`
    - `POST /rag` → `rag-recommender`
-   - `POST /report` → `report-generator`
 3. Cấu hình JWT authorizer dùng Supabase public key.
 4. Deploy lên một stage (ví dụ `prod`).
 

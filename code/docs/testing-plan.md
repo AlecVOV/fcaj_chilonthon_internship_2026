@@ -238,8 +238,9 @@ describe('Task cloud round-trip', () => {
 ## 5. Python Lambda Tests (pytest)
 
 > pytest CHỈ áp dụng cho lambda **đã có code**: `agent-bff`, `agent-action-handler`.
-> Các lambda còn lại (`emotion-detector`, `rag-recommender`, `report-generator`,
-> `admin-vectorizer`) hiện **chỉ có README — pending implementation**, chưa viết test.
+> Các lambda còn lại (`emotion-detector`, `rag-recommender`, `admin-vectorizer`) hiện **chỉ có
+> README — pending implementation**, chưa viết test. `report-generator` đã bị bỏ khỏi kế hoạch
+> (2026-07-10) — không cần test, xem `docs/PROJECT_STATE.md` mục 23.
 
 ### Lambdas có code (test áp dụng ngay)
 
@@ -257,7 +258,6 @@ describe('Task cloud round-trip', () => {
 |---|---|
 | `emotion-detector` | Pending implementation (chỉ README) — chưa viết test |
 | `rag-recommender` | Pending implementation (chỉ README) — chưa viết test |
-| `report-generator` | Pending implementation (chỉ README) — chưa viết test |
 | `admin-vectorizer` | Pending implementation (chỉ README) — chưa viết test |
 
 ## 6. Playwright E2E Tests (Optional MVP)

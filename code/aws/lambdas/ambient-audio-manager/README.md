@@ -112,7 +112,10 @@ Env vars của Lambda:
 
 Thêm 2 route (xem `aws/api-gateway/openapi.yaml`), integration `aws_proxy` trỏ về
 `ambient-audio-manager`, bật **CORS** trên API cho 2 route (`/ambient/upload-url`,
-`/ambient/files`). Cả 2 dùng chung JWT authorizer Supabase như các route khác.
+`/ambient/files`). **KHÔNG dùng JWT authorizer** (token Supabase ký ES256, authorizer native
+API Gateway chỉ RS256) — Lambda tự verify `Authorization: Bearer <token>` qua PostgREST
+(`GET {SUPABASE_URL}/rest/v1/users?id=eq.{sub}`), giống pattern `agent-bff`. Route thực tế
+đang chạy dưới `$default` (no authorizer) của HTTP API `ffepnb6gei`.
 Nhớ `aws lambda add-permission` cho API Gateway được invoke function.
 
 ## 7) Frontend

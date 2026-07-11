@@ -19,9 +19,9 @@
 
       <div class="flex items-center gap-3 h-full">
         <ColorModeToggle />
-        <NuxtLink to="/login" class="btn-primary text-sm">
-          Use our product
-        </NuxtLink>
+          <NuxtLink to="/login" class="rounded-md border px-2.5 py-1 text-sm font-medium text-ink hover:text-ink dark:text-on-dark dark:hover:text-on-dark transition-colors" style="background: rgb(204 120 92 / var(--tw-border-opacity, 1));">
+            Use our product
+          </NuxtLink>
       </div>
     </header>
 

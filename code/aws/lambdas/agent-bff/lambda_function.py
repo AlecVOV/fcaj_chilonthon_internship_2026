@@ -14,8 +14,9 @@ CHỐNG SESSION HIJACK: sessionId LUÔN được namespace theo user_id
   (session_id = "{user_id}::{client_sid}") -> client không thể đọc/ghi hội thoại
   hay session-state của user khác.
 
-CHỐNG DoS/cost: cap độ dài inputText (MAX_INPUT). Nên thêm API Gateway throttling
-  + WAF rate-based ở tầng hạ tầng (xem aws/bedrock/DEPLOY-cmd.md).
+CHỐNG DoS/cost: cap độ dài inputText (MAX_INPUT) + AGENT_DAILY_LIMIT lượt/user/ngày.
+  API Gateway throttling/WAF KHÔNG làm (scope demo bootcamp, không public commercial cho
+  nhiều user) — cân nhắc lại khi scale app lên >100 user thật, xem aws/bedrock/DEPLOY-cmd.md.
 
 GIỚI HẠN LƯỢT/NGÀY: trước khi gọi Bedrock, gọi RPC bump_agent_usage(AGENT_DAILY_LIMIT)
   (Supabase, SECURITY DEFINER) — vượt hạn -> 429. Fail-open nếu RPC lỗi (không chặn nhầm user).

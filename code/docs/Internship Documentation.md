@@ -577,6 +577,89 @@ Hạ tầng: Đóng gói toàn bộ bằng Docker, nối mạng qua Cloudflare T
     
          \- Amazon SNS: Gắn với Lambda AI Agent \-\> Bắn Push Notification nhắc uống nước, giãn cơ.
 
+# As-Built Architecture (Cập nhật 2026-07-10)
+
+> Hai sơ đồ "Initial Design" / "Final Design" phía trên là **kiến trúc dự kiến ban đầu của RFP**
+> — giữ nguyên làm hồ sơ lịch sử, KHÔNG xóa. Kiến trúc **thực tế đã build và deploy** khác đáng kể
+> ở nhiều điểm nền tảng. Sơ đồ + bảng dưới đây phản ánh đúng code hiện tại trong repo này.
+
+### Những đổi hướng lớn so với kiến trúc gốc
+
+| Kiến trúc gốc (RFP) | Thực tế đã build | Vì sao đổi |
+|---|---|---|
+| **Flutter** (Web & Mobile), Drift SQLite local DB | **Nuxt 3 SPA** (Vue 3 + Pinia + Tailwind), không có local DB | Web-first cho bootcamp, không cần build mobile riêng |
+| **Offline-first**: Sync Queue Manager, Drift SQLite, Last-Write-Wins | **Cloud-only**: mọi read/write đi thẳng Supabase qua `@supabase/supabase-js` (anon key + RLS), không hàng đợi, không local DB | Đơn giản hoá — 1 nguồn sự thật duy nhất, giảm bug đồng bộ |
+| **Self-hosted BaaS** trên HP EliteDesk Mini PC (Docker + Cloudflare Tunnel) | **Supabase Cloud managed** (Free Tier) | Free tier managed đủ dùng, tránh rủi ro vận hành hạ tầng vật lý |
+| **Python NLP microservice** tự host để detect emotion | Chưa build — hiện fallback **regex client-side**; kế hoạch dùng **Bedrock Claude classify** thay vì tự host ONNX | Tận dụng Bedrock đã có sẵn thay vì đóng gói model ONNX vào Lambda layer |
+| **AWS Lambda "AI Agent"**: phân tích lịch sử, gợi ý lịch trình chủ động | **Bedrock Agent** (`task-manager-agent`, model Haiku 4.5) qua Action Group `todo-manager-api` (list/create/update/delete task) — phạm vi hẹp hơn (quản lý task), chưa có "proactive schedule suggestions" | Scope MVP: agent quản lý task trước, chưa làm proactive suggestion |
+| **Lambda Report Gen** + EventBridge cron 23:59 + S3 + **SES email** | **Đã bỏ hoàn toàn.** Report giờ render Markdown + tải file **thuần client-side** trong Worklog History, không Lambda/S3/SES/cron nào | Quyết định scope (dự án demo bootcamp, không cần pipeline email tự động) — xem `docs/PROJECT_STATE.md` mục 21/23. **Đây là gap so với yêu cầu RFP gốc** (RFP yêu cầu tự động gửi email mỗi đêm) |
+| **Amazon SNS** — push notification Health Break | Chưa làm. Nhắc nghỉ dùng popup trong app + Web Notification API (client-side), không qua SNS | Đơn giản hơn, không cần hạ tầng push notification riêng |
+| **Amazon CloudFront** — CDN cho S3 media/report | Chưa làm — phát trực tiếp từ S3 qua HTTPS (`focus-mode-ambient-audio`, public-read) | Traffic thấp (demo), CDN chưa cần thiết ở scope này |
+| **JWT authorizer** ở API Gateway (Supabase JWT) | **KHÔNG dùng được** — token Supabase ký ES256, JWT authorizer native chỉ hỗ trợ RS256. Auth thực hiện **trong từng Lambda** (Bearer token → Supabase PostgREST verify + RLS) | Phát hiện kỹ thuật giữa chừng — ES256 không tương thích, phải tự verify |
+
+### Sơ đồ kiến trúc thực tế (As-Built)
+
+```mermaid
+flowchart TB
+    classDef client fill:#42A5F5,stroke:#1565C0,stroke-width:2px,color:white;
+    classDef cloud fill:#3ECF8E,stroke:#1F9E68,stroke-width:2px,color:black;
+    classDef database fill:#FFCA28,stroke:#FF8F00,stroke-width:2px,color:black;
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:black;
+    classDef ai fill:#673AB7,stroke:#4527A0,stroke-width:2px,color:white;
+    classDef planned fill:#ECEFF1,stroke:#90A4AE,stroke-width:2px,stroke-dasharray: 4 4,color:#455A64;
+
+    subgraph ClientApp ["1. Frontend -- Nuxt 3 SPA (cloud-only, KHONG offline-first)"]
+        direction TB
+        App("Nuxt SPA<br/>Vue 3 + Pinia + Tailwind<br/>AWS Amplify Hosting (focusmode.click)"):::client
+    end
+
+    subgraph SupabaseCloud ["2. Supabase Cloud (managed BaaS, KHONG self-host)"]
+        direction TB
+        Auth["Auth (GoTrue, ES256 JWT)"]:::cloud
+        PG[("PostgreSQL + pgvector<br/>users, tasks, focus_sessions,<br/>daily_worklogs/stats, media_library,<br/>ambient_sounds, agent_conversations/messages/daily_usage")]:::database
+        RLS{{"Row Level Security<br/>(is_admin(), owner-only)"}}:::cloud
+        Auth --- PG
+        PG --- RLS
+    end
+
+    subgraph AWSCloud ["3. AWS -- chi 3/6 Lambda da deploy that (khong JWT authorizer)"]
+        direction TB
+        APIGW["API Gateway HTTP API<br/>auth TRONG Lambda (Bearer to PostgREST)"]:::aws
+        AmbientLambda["Lambda: ambient-audio-manager<br/>presigned upload URL + list files"]:::aws
+        BffLambda["Lambda: agent-bff<br/>verify token, rate-limit/user/day,<br/>forward to Bedrock"]:::aws
+        ActionLambda["Lambda: agent-action-handler<br/>list / create / update / delete task"]:::aws
+        Bedrock[["Bedrock Agent: task-manager-agent<br/>Claude Haiku 4.5 (global) + Guardrail"]]:::ai
+        S3[("S3: focus-mode-ambient-audio<br/>MP3 files, public-read")]:::database
+
+        APIGW --> AmbientLambda
+        APIGW --> BffLambda
+        BffLambda --> Bedrock
+        Bedrock --> ActionLambda
+        AmbientLambda --> S3
+    end
+
+    subgraph Planned ["Chua deploy -- chi con spec (quyet dinh scope, khong phai thieu sot)"]
+        direction TB
+        Emotion["emotion-detector<br/>fallback hien tai: regex client"]:::planned
+        RAG["rag-recommender<br/>fallback hien tai: 2 goi y hardcode"]:::planned
+        Vectorizer["admin-vectorizer<br/>(embedding cho media_library)"]:::planned
+    end
+
+    App <-->|"Direct read/write<br/>anon key + RLS"| PG
+    App -->|"Bearer access_token"| APIGW
+    ActionLambda -->|"service_role<br/>(bypass RLS, .eq user_id code-enforced)"| PG
+
+    %% KHONG CON: Flutter, Drift SQLite, Sync Queue, self-hosted Docker/Mini PC,
+    %% Lambda Report Gen, Amazon SES, Amazon SNS, Amazon CloudFront,
+    %% EventBridge cron cho report, JWT authorizer o API Gateway.
+```
+
+**Chú thích:** khối màu xám nét đứt (`Planned`) là 3 lambda AI còn lại **chưa deploy** — quyết định
+có chủ đích do scope demo bootcamp nhỏ (xem `docs/PROJECT_STATE.md` mục 23), không phải do hết
+thời gian. `report-generator` không còn xuất hiện trong sơ đồ này vì đã bị **xóa hoàn toàn** khỏi
+kế hoạch (không phải "planned" nữa) — export report giờ chạy 100% phía client, không có node
+backend nào cho nó.
+
 # UI/UX Wireframes & Mockups
 
 ### **3\. Thiết kế Giao diện UI/UX (UI/UX Wireframes & Mockups)**

@@ -14,20 +14,21 @@
 | `agent-bff` | **CÓ code** (`aws/lambdas/agent-bff/lambda_function.py`, có `deploy.sh`) | BFF gọi Bedrock InvokeAgent. CHƯA mô tả contract chi tiết trong file này — xem README của hàm. |
 | `agent-action-handler` | **CÓ code** (`aws/lambdas/agent-action-handler/lambda_function.py`, có `deploy.sh`) | Action Group của Bedrock Agent: create/update/delete task trong Supabase. |
 | `emotion-detector` | **MỚI README** (chưa có `lambda_function.py`) | Mục 1 dưới đây là spec. |
-| `report-generator` | **MỚI README** (chưa có `lambda_function.py`) | Mục 2 dưới đây là spec. |
-| `rag-recommender` | **MỚI README** (chưa có `lambda_function.py`) | Mục 3 dưới đây là spec. |
-| `admin-vectorizer` | **MỚI README** (chưa có `lambda_function.py`) | Mục 5 dưới đây là spec. |
-| Agentic Suggestions (`focus-ai-suggestions`) | **Chỉ spec** (chưa có thư mục/code) | Mục 4 dưới đây là spec đề xuất. |
+| `rag-recommender` | **MỚI README** (chưa có `lambda_function.py`) | Mục 2 dưới đây là spec. |
+| `admin-vectorizer` | **MỚI README** (chưa có `lambda_function.py`) | Mục 4 dưới đây là spec. |
+| Agentic Suggestions (`focus-ai-suggestions`) | **Chỉ spec** (chưa có thư mục/code) | Mục 3 dưới đây là spec đề xuất. |
 | Layers (`onnx-transformers`, `sentence-transformers`) | **Chỉ spec** | `aws/layers/` mới có README. |
 | API Gateway (`aws/api-gateway/openapi.yaml`) + Bedrock action group (`aws/bedrock/action-group-openapi.yaml`) | **Có spec, CHƯA deploy** | Frontend chỉ gọi khi có `NUXT_PUBLIC_API_GATEWAY_URL`; nếu thiếu thì dùng fallback (xem mục Frontend fallback). |
 
-> **Lưu ý route:** OpenAPI spec dùng `/emotion/detect`, `/report`, `/rag/recommend`, `/admin/vectorize`, `/agent/chat`. Frontend hiện gọi các route rút gọn `/emotion`, `/report`, `/rag`, `/agent/chat`. Khi deploy thật cần thống nhất route giữa hai bên.
+> **`report-generator` đã bị bỏ khỏi kế hoạch (2026-07-10)** — folder Lambda + spec đã xóa. Export report giờ chạy **thuần client-side**, xem bullet "Report" bên dưới.
+
+> **Lưu ý route:** OpenAPI spec dùng `/emotion/detect`, `/rag/recommend`, `/admin/vectorize`, `/agent/chat`. Frontend hiện gọi các route rút gọn `/emotion`, `/rag`, `/agent/chat`. Khi deploy thật cần thống nhất route giữa hai bên.
 
 ## Frontend fallback (khi chưa có API Gateway URL)
 
 - **Emotion** (`web/composables/useEmotionDetector.ts`): có URL → `POST {API}/emotion`; thiếu URL → phân loại bằng **regex client-side** (nhãn: focused/stressed/exhausted/relaxed).
 - **RAG** (`web/composables/useRAG.ts`): có URL → `POST {API}/rag`; thiếu URL/ lỗi → trả **2 item hardcode** (On Patience – sutra; 5‑Minute Breathing – video).
-- **Report** (`web/composables/useReportExport.ts`): có URL → `POST {API}/report`; thiếu URL/ lỗi → **render Markdown và tải `.md` ở client** (không còn pipeline LaTeX/Tectonic).
+- **Report** (`web/composables/useReportExport.ts`): **KHÔNG gọi API nào nữa** (đổi 2026-07-10) — luôn render Markdown + tải `.md` thuần client-side; không còn khái niệm "fallback", đây là đường duy nhất.
 - **Agent chat** (`web/composables/useAgentChat.ts`): **bắt buộc** API Gateway URL; thiếu URL → **báo lỗi** "AI agent backend is not configured" (không có mock).
 
 ---
@@ -93,98 +94,7 @@ Content-Type: application/json
 
 ---
 
-## 2. Report Generator Lambda (`focus-report-generator`)
-
-> **Status:** MỚI README (chưa có `lambda_function.py`). Spec dưới đây. **Frontend đã chuyển sang Markdown** (`web/composables/useReportExport.ts`): khi thiếu API Gateway URL thì render Markdown rồi tải `.md` ở client; route gọi là `POST {API}/report` với body `{ md_content, user_id, date }` (không còn pipeline LaTeX/Tectonic). Phần spec LaTeX/Tectonic/SES dưới đây là phương án backend dự kiến, CHƯA implement.
-
-| Property | Value |
-|---|---|
-| **Runtime** | Python 3.12 |
-| **Trigger** | EventBridge `cron(59 16 * * ? *)` (23:59 UTC+7) and API Gateway `POST /reports/generate` |
-| **Memory** | 1024 MB |
-| **Timeout** | 60 seconds |
-| **Package** | `jinja2`, `boto3`, `psycopg2-binary`, `supabase` |
-| **LaTeX Engine** | Tectonic (Lambda Layer, ~15 MB standalone binary) |
-
-### Request (API Gateway)
-
-```json
-POST /reports/generate
-Authorization: Bearer <supabase_jwt>
-
-{
-  "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "date": "2026-05-20",
-  "send_email": true
-}
-```
-
-### Request (EventBridge — nightly cron)
-
-```json
-{
-  "source": "aws.events",
-  "detail-type": "Scheduled Event",
-  "time": "2026-05-20T16:59:00Z",
-  "detail": {}
-}
-```
-When triggered by EventBridge, the Lambda queries **all users** who had focus sessions on the previous day and generates reports for each.
-
-### Processing (per user)
-
-```
-1. Query focus_sessions WHERE user_id = ? AND start_time::date = ?date
-2. Query tasks WHERE user_id = ? AND updated_at::date = ?date
-3. Query daily_worklogs for existing mood_summary
-4. Build template context dict:
-   {
-     "REPORT-DATE-FULL": "May 20, 2026",
-     "USER-DISPLAY-NAME": "John Doe",
-     "USER-EMAIL": "john@example.com",
-     "TOTAL-FOCUS-TIME": "155",
-     "SESSIONS-COUNT": 5,
-     "TASKS-COMPLETED": 3,
-     "TASKS-TOTAL": 5,
-     "DOMINANT-EMOTION": "focused",
-     "STREAK-DAYS": 12,
-     "TASK-LIST-ROWS": "completed & Write thesis & 50 \\\\\ncompleted & Review paper & 30 \\\\\npending & Plan sprint & 0 \\\\",
-     "PEAK-FOCUS-HOUR": "22:00 (3 sessions)",
-     "MOST-PRODUCTIVE-DAY": "Wednesday (avg 180 min)",
-     "LONGEST-STREAK": "95",
-     "MOOD-SUMMARY-TEXT": "You maintained strong focus throughout the day, with a slight dip after lunch.",
-     "AI-SUGGESTIONS-BLOCK": "\\begin{itemize}\n  \\item Your focus peaks at 22:00. Schedule deep work in the evening.\n  \\item You lose focus after ~90 minutes on Mondays. Try 25/5 Pomodoro cycles.\n\\end{itemize}",
-     "RAG-RECOMMENDATIONS-BLOCK": "\\begin{itemize}\n  \\item \\textbf{On Patience} (sutra) — Lamrim Class 2023\n  \\item \\textbf{5-Minute Breathing} (video) — Self-Help\n\\end{itemize}",
-     "APP-URL": "https://focusmode.app"
-   }
-5. Render LaTeX from Jinja2 template → write .tex string
-6. Compile .tex → .pdf via Tectonic (subprocess call)
-7. Upload both files to S3: s3://YOUR_BUCKET_NAME/reports/{user_id}/{date}/
-8. Insert/Update daily_worklogs row with S3 URLs
-9. If send_email=true: call Amazon SES SendRawEmail with PDF attachment
-```
-
-### Response (200 OK)
-
-```json
-{
-  "worklog_id": "660e8400-e29b-41d4-a716-446655440000",
-  "latex_url": "https://YOUR_BUCKET_NAME.s3.ap-southeast-1.amazonaws.com/reports/550e8400/2026-05-20/report.tex",
-  "pdf_url": "https://YOUR_BUCKET_NAME.s3.ap-southeast-1.amazonaws.com/reports/550e8400/2026-05-20/report.pdf",
-  "email_sent": true,
-  "message": "Report generated and emailed to user@example.com"
-}
-```
-
-### Email Template (SES)
-
-**Subject:** `Your Daily Focus Report — May 20, 2026`  
-**Body (HTML):** Brief summary + link to PDF on S3  
-**Attachment:** `focus_report_2026-05-20.pdf`
-
----
-
-## 3. RAG Recommender Lambda (`focus-rag-recommender`)
+## 2. RAG Recommender Lambda (`focus-rag-recommender`)
 
 > **Status:** MỚI README (chưa có `lambda_function.py`). Spec dưới đây. Frontend (`web/composables/useRAG.ts`) gọi `POST {API}/rag` khi có URL, ngược lại trả 2 item hardcode. Truy vấn pgvector dùng hàm `public.search_similar_content()` (đã có trong migration `00001`); embedding `all-MiniLM-L6-v2` = **384 chiều**; `media_type` hợp lệ = quote/sutra/video/article/audio.
 
@@ -261,9 +171,9 @@ SELECT * FROM public.search_similar_content(
 
 ---
 
-## 4. Agentic Suggestions Lambda (`focus-ai-suggestions`)
+## 3. Agentic Suggestions Lambda (`focus-ai-suggestions`)
 
-> **Status:** Chỉ spec — CHƯA có thư mục/code trong `aws/lambdas/`. Hiện gợi ý "AI Suggestions" trong report là chuỗi tĩnh ở client (`web/composables/useReportExport.ts`).
+> **Status:** Chỉ spec — CHƯA có thư mục/code trong `aws/lambdas/`. Mục "AI Suggestions"/"Recommended Content" từng là chuỗi tĩnh hardcode trong report Markdown đã bị **bỏ hẳn** (2026-07-10, xem `docs/PROJECT_STATE.md` mục 18/R1) — report giờ không có phần suggestions nào cho tới khi lambda này thật sự được xây.
 
 | Property | Value |
 |---|---|
@@ -316,7 +226,7 @@ Authorization: Bearer <supabase_jwt>
 
 ---
 
-## 5. Admin Vectorization Lambda (`focus-admin-vectorize` / thư mục `admin-vectorizer`)
+## 4. Admin Vectorization Lambda (`focus-admin-vectorize` / thư mục `admin-vectorizer`)
 
 > **Status:** MỚI README (chưa có `lambda_function.py`). Spec dưới đây. Khi implement: sinh embedding `all-MiniLM-L6-v2` 384 chiều rồi INSERT vào `public.media_library` (`type` ∈ quote/sutra/video/article/audio, cột `embedding_vector VECTOR(384)`).
 
@@ -373,7 +283,7 @@ Authorization: Bearer <supabase_jwt>     // Must be admin role
 
 ---
 
-## 6. Agent BFF Lambda (`agent-bff`) — IMPLEMENTED
+## 5. Agent BFF Lambda (`agent-bff`) — IMPLEMENTED
 
 > **Status:** CÓ code (`aws/lambdas/agent-bff/lambda_function.py`, handler `handler`, có `deploy.sh`). Đây là hàm duy nhất phục vụ Agent chat ở phía frontend.
 
@@ -412,7 +322,7 @@ Authorization: Bearer <supabase_jwt>
 
 ---
 
-## 7. Agent Action Handler Lambda (`agent-action-handler`) — IMPLEMENTED
+## 6. Agent Action Handler Lambda (`agent-action-handler`) — IMPLEMENTED
 
 > **Status:** CÓ code (`aws/lambdas/agent-action-handler/lambda_function.py`, handler `handler`, có `deploy.sh`). Là Action Group của Bedrock Agent, ghi thẳng Supabase. Contract đầu vào theo `aws/bedrock/action-group-openapi.yaml`.
 

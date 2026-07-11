@@ -24,14 +24,15 @@
 
       <!-- Sign Up -->
       <form v-if="activeTab === 'signup'" @submit.prevent="handleSignUp" class="space-y-4">
-        <div class="rounded-lg border border-amber/30 bg-amber/5 p-3 text-xs text-warning dark:text-amber-400">
+        <!-- <div class="rounded-lg border border-amber/30 bg-amber/5 p-3 text-xs text-warning dark:text-amber-400">
           <p class="font-medium mb-1">⚠️ Request Access</p>
           <p>This sends a registration request to admin for approval. If you already have demo credentials (admin@focusmode.app / user@focusmode.app), use <strong>Sign In</strong> instead.</p>
-        </div>
+        </div> -->
         <div><label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Full Name</label><input v-model="signupName" class="input" placeholder="Jane Doe" required /></div>
         <div><label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Email</label><input v-model="signupEmail" type="email" class="input" placeholder="jane@example.com" required autocomplete="email" /></div>
         <div><label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Password</label><input v-model="signupPass" type="password" class="input" placeholder="Min 6 characters" minlength="6" required /></div>
         <p class="text-xs text-ink-muted dark:text-on-dark-soft">Your account will be created with the password you just set, then an admin must approve it before you can sign in.</p>
+        <p class="text-xs text-ink-muted dark:text-on-dark-soft">After that you will receive an email of confirmation.</p>
         <p v-if="signupError" class="text-sm text-error dark:text-error">{{ signupError }}</p>
         <p v-if="successMsg" class="text-sm text-success dark:text-success">{{ successMsg }}</p>
         <button type="submit" class="btn-primary w-full" :disabled="authLoading || !signupName.trim() || !signupEmail.trim() || !signupPass.trim()">{{ authLoading ? 'Creating...' : 'Create Account' }}</button>

@@ -3,6 +3,8 @@
 > Cập nhật 2026-07-06 — đồng bộ với bản cài đặt cloud-only hiện tại. Nguồn chuẩn khi có mâu thuẫn: `docs/PROJECT_STATE.md`.
 >
 > **Update (2026-07-06):** (1) Pipeline report đã **bỏ LaTeX/Tectonic** — nay render **Markdown (UTF‑8)** trong `web/composables/useReportExport.ts`, nên mọi nhận định về LaTeX / XeLaTeX / `sanitizeForLatex` bên dưới đã **lỗi thời** và được đánh dấu tại chỗ. (2) Đã **gỡ env `ADMIN_EMAILS`** — admin chỉ còn xác định bằng `public.users.role='admin'` (khớp RLS `is_admin()`). (3) Migrations đã có tới **`00009`** (hardening DB: trigger chặn leo quyền, FK `users→auth.users`, drop `sync_log`, index `users.status`) — vẫn **cần chạy `00009`** trong Supabase SQL Editor. (4) Đợt rà local + DB (2026-07-05) landing thêm nhiều fix (xem §2.8). (5) Còn mở: AWS AI (4/6 lambda chưa code) + Amplify chưa deploy; P0 auth JWT + route mismatch; Supabase "Confirm email" phải **TẮT**.
+>
+> **Update (2026-07-10) — QUYẾT ĐỊNH SCOPE, ảnh hưởng RFP compliance:** `report-generator` Lambda **đã bị bỏ khỏi kế hoạch hoàn toàn** (folder `aws/lambdas/report-generator/` đã xóa, route `/report` đã gỡ khỏi `api-gateway/openapi.yaml`). Export report giờ **thuần client-side** — `useReportExport.ts` render Markdown + tải file ngay trên trình duyệt, theo yêu cầu của user, mỗi ngày trong Worklog History. **Lưu ý quan trọng:** RFP (`docs/Internship Documentation.md` dòng 134-136, 162, 486, 558, 576) yêu cầu cụ thể **tự động gửi EMAIL báo cáo mỗi đêm 23:59 qua EventBridge + Lambda + SES** — client-side download **KHÔNG thỏa mãn** phần "tự động" + "email" của yêu cầu này (user phải tự vào app bấm tải, không có gì chạy nền/gửi mail). Đây là đánh đổi có chủ đích (scope dự án nhỏ, xem `docs/PROJECT_STATE.md` mục 23) — nhưng nếu phần trình bày/nộp bài đánh giá theo đúng RFP gốc thì mục "báo cáo tự động qua email" sẽ được xem là **chưa làm**, không phải "đã làm bằng cách khác". Mọi dòng bên dưới nhắc "Critical — 40% of evaluation" / "explicitly promised in RFP" cho `report-generator` phản ánh đúng thực tế này, KHÔNG lỗi thời — chỉ có phần "chưa implement Lambda" nay đổi thành "chủ động không làm Lambda" mà thôi.
 
 **Date:** May 22, 2026  
 **Author:** GitHub Copilot (DeepSeek V4 Pro)  
@@ -20,7 +22,7 @@
 - Track productivity through task management and focus time analytics
 - Receive post-session emotion analysis via NLP (distilbert model)
 - Get personalized content recommendations based on emotional state (RAG + pgvector)
-- Receive automated daily reports (Markdown, UTF‑8 native); email delivery via Amazon SES is planned (the `report-generator` Lambda is not yet implemented)
+- Receive automated daily reports (Markdown, UTF‑8 native) — **[Update 2026-07-10] no longer via SES email**: `report-generator` Lambda was dropped from the plan entirely; reports are downloaded manually by the user in Worklog History (client-side render + download, no background/email delivery). See update note at top of file — this diverges from the RFP's "automated nightly email" requirement.
 
 The target user is a single-user productivity scenario — a student or professional managing their own focus sessions and tasks. The architecture is designed to run entirely on cloud free tiers ($0 infrastructure budget).
 
@@ -107,7 +109,7 @@ Every service choice is justified against free-tier limits:
 
 > **Update (2026-06-29):** Of the six Lambdas, two now have real code (`agent-bff`, `agent-action-handler`). The following four remain **documented but not yet implemented** (README only):
 
-- **report-generator**: Markdown report rendering + S3 upload + SES email (the LaTeX/Tectonic step is gone; format is now Markdown)
+- **report-generator**: ~~Markdown report rendering + S3 upload + SES email~~ — **[Update 2026-07-10] dropped from the plan entirely** (not just "not yet implemented" — actively decided against; folder deleted). See update note at top of file.
 - **emotion-detector**: ONNX emotion classification from journal text
 - **admin-vectorizer**: Admin-triggered embedding generation for media library
 - **rag-recommender**: Semantic similarity search against pgvector
@@ -190,7 +192,7 @@ Playwright E2E tests are marked "optional for MVP" in the testing plan. For a Hi
 
 | # | Recommendation | Effort | Impact |
 |---|---|---|---|
-| 1 | **Implement report-generator Lambda** — render the Markdown report, S3 upload, SES email | 2-3 days | Critical — core feature, 40% of evaluation |
+| 1 | **Implement report-generator Lambda** — render the Markdown report, S3 upload, SES email — **[Update 2026-07-10] decided against; won't be built** (see top-of-file note — RFP compliance gap accepted as a scope tradeoff) | 2-3 days | Critical — core feature, 40% of evaluation |
 | 2 | **Add explicit `ref`/`computed` imports to all Pinia store files** — prevent `useUserStore is not defined` errors | 1 hour | Critical — blocking bug |
 | 3 | **Write pytest tests for emotion detection Lambda handler** — test with real/simulated journal text | 1 day | High — 70% coverage target |
 | 4 | ~~Add integration test for sync queue → Supabase push~~ — **obsolete (offline sync removed; cloud-only)** | — | — |
@@ -233,7 +235,7 @@ The project demonstrates exceptional technical breadth and depth:
 - **Thoughtful tradeoffs** — model size vs Lambda memory; Markdown reports (no LaTeX toolchain) for native UTF‑8/Vietnamese
 
 **What's holding it back from a 9 or 10:**
-- **4 of 6 Lambda functions are not implemented** — `report-generator`, `emotion-detector`, `admin-vectorizer`, and `rag-recommender` are README/spec only; only `agent-bff` and `agent-action-handler` have code. API Gateway/Bedrock are not deployed and there is no CI/CD. The report generator is explicitly promised in the RFP.
+- **3 of 5 remaining Lambda functions are not implemented** — `emotion-detector`, `admin-vectorizer`, and `rag-recommender` are README/spec only; `agent-bff`, `agent-action-handler`, and `ambient-audio-manager` have code and are deployed. `report-generator` is not "not yet implemented" — **[Update 2026-07-10] it was actively removed from the plan.** The report generator (automated nightly email) is explicitly promised in the RFP; this is now a known, accepted RFP-compliance gap rather than a pending task — see top-of-file note.
 - **Testing is planned but minimal** — the 70% coverage target won't be met without actual Lambda tests
 - **Deploy blockers still open** — `00009` not yet run; P0 auth (frontend sends the user UUID instead of a Supabase JWT) and the FE↔OpenAPI route mismatch are unresolved; Amplify build config (`nuxt generate` + `amplify.yml`) is not in place
 - **Pinia import reliability** — the pattern of stores using `ref`/`computed` without explicit imports is fragile and has caused real compilation errors
@@ -249,7 +251,7 @@ The project demonstrates exceptional technical breadth and depth:
 ### Immediate (This Week)
 
 - [ ] **Fix Pinia imports** — Add `import { ref, computed } from 'vue'` to `user.store.ts`, `task.store.ts`, `focus.store.ts`
-- [ ] **Implement report-generator Lambda** — Python, render the Markdown report, upload to S3, send SES email (currently README only; frontend falls back to a client-side `.md` download)
+- [ ] ~~**Implement report-generator Lambda**~~ — **[Update 2026-07-10] decided against, won't be built.** Frontend now *always* does a client-side `.md` download (not a "fallback" anymore — the only path). This checklist item is closed as "won't do," not "todo." See top-of-file note re: RFP compliance.
 - [ ] **Add API Gateway route** — `POST /report` → Lambda with JWT authorizer (also resolve the FE `/report` ↔ OpenAPI route naming)
 - [ ] **Test export flow end-to-end** — Dashboard → "Export Report" → Lambda → S3 → SES → email received
 

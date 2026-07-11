@@ -21,10 +21,16 @@
 
 ## 1) Đổi CODE Lambda
 
+> ⚠️ **KHÔNG dùng `tar -a -cf function.zip ...` trong Git Bash** — GNU tar (đi kèm Git Bash)
+> không hỗ trợ filter `.zip` qua `-a`, âm thầm tạo file SAI định dạng (AWS CLI báo lỗi khó hiểu
+> `--zip-file must be a zip file with the fileb:// prefix` dù path đúng). Kiểm nhanh 1 file đã
+> zip: `python3 -c "import zipfile; zipfile.ZipFile('function.zip')"` (lỗi `File is not a zip
+> file` = dính bug này). **Luôn dùng PowerShell `Compress-Archive`.**
+
 ### agent-bff / ambient-audio-manager (chỉ stdlib + boto3)
 ```bat
 cd lambdas\agent-bff
-tar -a -cf function.zip lambda_function.py
+powershell -Command "Compress-Archive -Path lambda_function.py -DestinationPath function.zip -Force"
 aws lambda update-function-code --function-name agent-bff --zip-file fileb://function.zip --region ap-southeast-1
 cd ..\..
 ```
@@ -36,10 +42,12 @@ cd lambdas\agent-action-handler
 if exist package rmdir /s /q package
 pip install --platform manylinux2014_x86_64 --implementation cp --python-version 3.12 --only-binary=:all: --upgrade --target package -r requirements.txt
 copy /y lambda_function.py package\ >nul
-tar -a -cf function.zip -C package .
+powershell -Command "Compress-Archive -Path package\* -DestinationPath function.zip -Force"
 aws lambda update-function-code --function-name agent-action-handler --zip-file fileb://function.zip --region ap-southeast-1
 cd ..\..
 ```
+> Nếu `package\` đã có sẵn từ lần deploy trước (đủ wheel manylinux), có thể bỏ qua bước
+> `pip install` — chỉ cần `copy /y lambda_function.py package\` rồi zip lại cho nhanh.
 **Check:** `aws lambda get-function --function-name <fn> --region ap-southeast-1 --query "Configuration.[LastUpdateStatus,State]"` → `Successful` / `Active`.
 CloudWatch log: `/aws/lambda/<fn>`.
 
@@ -50,12 +58,12 @@ Bảng biến hiện tại của từng Lambda:
 | Lambda | Biến env |
 |---|---|
 | `ambient-audio-manager` | `AMBIENT_S3_BUCKET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` |
-| `agent-bff` | `BEDROCK_AGENT_ID`, `BEDROCK_AGENT_ALIAS_ID`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `ALLOWED_ORIGINS` |
+| `agent-bff` | `BEDROCK_AGENT_ID`, `BEDROCK_AGENT_ALIAS_ID`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `ALLOWED_ORIGINS`, `AGENT_DAILY_LIMIT` (số lượt AI/user/ngày, mặc định 20 nếu không set) |
 | `agent-action-handler` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 
 Ví dụ đổi 1 biến của agent-bff (vẫn phải ghi lại HẾT):
 ```bat
-aws lambda update-function-configuration --function-name agent-bff --region ap-southeast-1 --environment "Variables={BEDROCK_AGENT_ID=KKJCF9RAKJ,BEDROCK_AGENT_ALIAS_ID=<ALIAS_ID>,SUPABASE_URL=https://uxvbcezmamdbzzplsner.supabase.co,SUPABASE_ANON_KEY=<ANON_KEY>,ALLOWED_ORIGINS=https://main.d1efs1vwvbok9m.amplifyapp.com,https://focusmode.click,http://localhost:3000}"
+aws lambda update-function-configuration --function-name agent-bff --region ap-southeast-1 --environment "Variables={BEDROCK_AGENT_ID=KKJCF9RAKJ,BEDROCK_AGENT_ALIAS_ID=<ALIAS_ID>,SUPABASE_URL=https://uxvbcezmamdbzzplsner.supabase.co,SUPABASE_ANON_KEY=<ANON_KEY>,ALLOWED_ORIGINS=https://main.d1efs1vwvbok9m.amplifyapp.com,https://focusmode.click,http://localhost:3000,AGENT_DAILY_LIMIT=20}"
 ```
 **Check:** `aws lambda get-function-configuration --function-name agent-bff --region ap-southeast-1 --query "Environment.Variables"` → đủ biến.
 
@@ -65,13 +73,15 @@ aws lambda update-function-configuration --function-name agent-bff --region ap-s
 aws bedrock-agent update-agent --region ap-southeast-1 --agent-id KKJCF9RAKJ ^
   --agent-name task-manager-agent ^
   --agent-resource-role-arn arn:aws:iam::677276113002:role/AmazonBedrockExecutionRoleForAgents_task ^
-  --foundation-model anthropic.claude-3-haiku-20240307-v1:0 ^
+  --foundation-model global.anthropic.claude-haiku-4-5-20251001-v1:0 ^
   --instruction file://bedrock/agent-instructions.txt ^
   --guardrail-configuration "guardrailIdentifier=9l9zw1sh1tei,guardrailVersion=1" ^
   --idle-session-ttl-in-seconds 600
 ```
 > ⚠️ `update-agent` GHI ĐÈ toàn bộ → phải truyền lại `--guardrail-configuration` +
 > `--foundation-model` + role, không thì bị gỡ. File instruction phải ASCII.
+> Model hiện tại LÀ `global.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku 4.5, global
+> cross-region, 50 RPM) — account này KHÔNG có access Haiku 3, đừng đổi nhầm về model cũ.
 Rồi **prepare + update alias** (mục 7).
 
 ## 4) Đổi ACTION GROUP / OpenAPI schema (`action-group-openapi.yaml`)
@@ -86,6 +96,8 @@ aws bedrock-agent update-agent-action-group --region ap-southeast-1 ^
 ```
 > ⚠️ Schema BẮT BUỘC có `description` ở **mỗi operation** và ở **cấp parameter** (không phải
 > trong `schema`), nếu không lỗi `Failed to create OpenAPI 3 model ... 'description' is missing`.
+> Action group hiện có 4 operation: `GET /list-tasks`, `POST /create-task`, `PUT /update-task`,
+> `DELETE /delete-task` (`list-tasks` thêm 2026-07-10 để agent tự resolve tiêu đề → taskId).
 Rồi **prepare + update alias** (mục 7).
 
 ## 5) Đổi GUARDRAIL

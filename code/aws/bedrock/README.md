@@ -1,14 +1,17 @@
 # Bedrock Agent — Setup
 
-> ⚠️ **Runbook chuẩn (end-to-end, đã kèm bảo mật + chống prompt injection): [`DEPLOY-cmd.md`](DEPLOY-cmd.md).**
-> File README này là phác thảo ban đầu, THIẾU nhiều bước bắt buộc (model access, agent service
-> role, prepare-agent, Guardrail, resource policy scope đúng, route API Gateway). Làm theo
-> `DEPLOY-cmd.md`. Đặc biệt: token Supabase ký **ES256** nên KHÔNG dùng JWT authorizer ở API
-> Gateway — agent-bff tự verify token trong Lambda (như ambient-audio-manager).
+> ✅ **LIVE**: agent `task-manager-agent` (id `KKJCF9RAKJ`), alias `prod` = `K8YDCGJRW4`, model
+> **`global.anthropic.claude-haiku-4-5-20251001-v1:0`**. Action group `todo-manager-api`
+> (id `80WEPXLIJ8`) có 4 operation: `GET /list-tasks`, `POST /create-task`, `PUT /update-task`,
+> `DELETE /delete-task`. Đây là README ban đầu (giữ lại tham khảo cấu trúc Console) — để
+> **deploy từ đầu** dùng [`DEPLOY-cmd.md`](DEPLOY-cmd.md) (runbook end-to-end, kèm bảo mật +
+> chống prompt injection); để **sửa hệ thống đang chạy** (đổi instructions/model/action
+> group/env) dùng `../UPDATE-guide.md`. Đặc biệt: token Supabase ký **ES256** nên KHÔNG dùng
+> JWT authorizer ở API Gateway — agent-bff tự verify token trong Lambda (như ambient-audio-manager).
 
 ## What this folder contains
 
-- `action-group-openapi.yaml` — OpenAPI schema cho Action Group (create/update/delete-task).
+- `action-group-openapi.yaml` — OpenAPI schema cho Action Group (list/create/update/delete-task).
 - `DEPLOY-cmd.md` — runbook deploy đầy đủ (Windows cmd) + ma trận bảo mật + test injection.
 - `agent-instructions.txt` — instructions đã hardened chống prompt injection (dán vào agent).
 - `guardrail-config.json` — cấu hình Guardrail (Prompt Attack HIGH + denied topics + PII).
@@ -58,7 +61,8 @@ aws lambda add-permission \
 
 ### 6. Get Agent IDs
 After creation, note:
-- **Agent ID:** `XXXXXXXXXX`
-- **Agent Alias ID:** `YYYYYYYYYY`
+- **Agent ID:** `XXXXXXXXXX` (thực tế đang chạy: `KKJCF9RAKJ`)
+- **Agent Alias ID:** `YYYYYYYYYY` (thực tế đang chạy: `K8YDCGJRW4`, tên alias `prod`)
 
-Set these as environment variables on the `agent-bff` Lambda.
+Set these as environment variables on the `agent-bff` Lambda (`BEDROCK_AGENT_ID`,
+`BEDROCK_AGENT_ALIAS_ID`).

@@ -158,4 +158,6 @@ luôn lọc theo `sub`.
 - **Dọn:** có thể **xoá biến `SUPABASE_JWT_SECRET`** (không còn dùng sau khi bỏ verify HS256).
 - **Log chẩn đoán:** Lambda in `AUTH: header_present=.. alg=..` và `AUTH: rows=.. role=..` +
   `AUTH DENY <code>: <lý do>` vào CloudWatch `/aws/lambda/ambient-audio-manager` — soi khi có sự cố.
-- **Siết thêm (tùy chọn):** giới hạn IP/WAF, rút ngắn hạn presigned (đang 5 phút).
+- **Rút ngắn hạn presigned** (đang 5 phút) nếu muốn siết thêm. WAF/giới hạn IP: KHÔNG làm —
+  scope hiện tại là demo bootcamp, không public commercial cho nhiều user; future update nếu
+  scale app lên >100 user thật.
