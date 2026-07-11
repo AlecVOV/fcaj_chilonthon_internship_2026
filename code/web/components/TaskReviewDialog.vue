@@ -7,12 +7,12 @@
       </p>
       <div>
         <label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">How was this task? Any notes?</label>
-        <textarea v-model="taskStore.reviewText" class="input" rows="3" placeholder="E.g., Easier than expected, took longer because..." />
+        <textarea v-model="taskStore.reviewText" class="input" rows="3" placeholder="E.g., Easier than expected, took longer because of what?" />
       </div>
       <div class="mt-4 flex justify-end gap-2">
         <button @click="taskStore.skipReview()" class="btn-ghost">Skip</button>
         <button @click="taskStore.saveReview()" class="btn-primary" :disabled="!taskStore.reviewText.trim() || taskStore.reviewSaving">
-          {{ taskStore.reviewSaving ? 'Saving...' : 'Save Review' }}
+          {{ taskStore.reviewSaving ? 'Saving' : 'Save Review' }}
         </button>
       </div>
     </div>

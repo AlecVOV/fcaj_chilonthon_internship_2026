@@ -9,7 +9,7 @@
 
     <div class="grid gap-4 lg:grid-cols-[15rem_1fr]">
       <!-- Sidebar: danh sách đoạn chat -->
-      <aside class="card !p-3 flex flex-col gap-2 h-[calc(100vh-14rem)]">
+      <aside class="card !p-3 flex flex-col gap-2 h-[calc(100vh-11rem)]">
         <button @click="newConversation" class="btn-primary w-full text-sm">+ New chat</button>
         <div class="flex-1 overflow-y-auto space-y-1 min-h-0">
           <p v-if="isLoadingList && conversations.length === 0" class="py-2 text-center text-2xs text-ink-soft dark:text-on-dark-soft/70">Đang tải…</p>

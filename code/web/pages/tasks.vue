@@ -27,7 +27,7 @@
           </div>
           <div>
             <label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Description <span class="text-ink-soft/60">(optional)</span></label>
-            <textarea v-model="newDescription" class="input" rows="2" placeholder="Add more detail..." />
+            <textarea v-model="newDescription" class="input resize-y" rows="7" placeholder="Add more detail" />
           </div>
           <div>
             <label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Priority</label>
@@ -42,7 +42,7 @@
         <p v-if="addError" class="mt-3 text-sm text-error dark:text-error">{{ addError }}</p>
         <div class="mt-4 flex justify-end gap-2">
           <button @click="closeAdd" class="btn-ghost">Cancel</button>
-          <button @click="handleAdd" class="btn-primary" :disabled="!newTitle.trim() || saving">{{ saving ? 'Adding...' : 'Add Task' }}</button>
+          <button @click="handleAdd" class="btn-primary" :disabled="!newTitle.trim() || saving">{{ saving ? 'Adding' : 'Add Task' }}</button>
         </div>
       </div>
     </div>
@@ -51,7 +51,7 @@
       {{ taskStore.loadError }}
       <button @click="taskStore.fetchTasks()" class="link ml-2">Retry</button>
     </div>
-    <div v-if="taskStore.isLoading" class="py-8 text-center text-sm text-ink-soft dark:text-on-dark-soft">Loading...</div>
+    <div v-if="taskStore.isLoading" class="py-8 text-center text-sm text-ink-soft dark:text-on-dark-soft">Loading</div>
     <div v-else-if="filteredTasks.length === 0" class="py-12 text-center text-sm text-ink-soft dark:text-on-dark-soft/70">
       No {{ statusLabel(activeTab).toLowerCase() }} tasks.
       <button @click="openAdd" class="link ml-1">Add one manually</button>
@@ -106,7 +106,7 @@
           </div>
           <div>
             <label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Description <span class="text-ink-soft/60">(optional)</span></label>
-            <textarea v-model="editDescription" :disabled="editCompleted" :class="{ 'opacity-60 cursor-not-allowed': editCompleted }" class="input" rows="2" placeholder="Add more detail..." />
+            <textarea v-model="editDescription" :disabled="editCompleted" :class="{ 'opacity-60 cursor-not-allowed': editCompleted, 'resize-y': !editCompleted }" class="input" rows="7" placeholder="Add more detail" />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -129,7 +129,7 @@
           </div>
           <div v-if="editCompleted">
             <label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Your review</label>
-            <textarea v-model="editReview" class="input" rows="3" placeholder="How did this task go? Any notes..." />
+            <textarea v-model="editReview" class="input" rows="3" placeholder="How did this task go? Any notes" />
           </div>
         </div>
         <p v-if="editCompleted" class="mt-3 text-xs text-ink-soft dark:text-on-dark-soft/70">This task is completed — only your review can be edited.</p>
@@ -137,7 +137,7 @@
         <p v-if="editError" class="mt-3 text-sm text-error dark:text-error">{{ editError }}</p>
         <div class="mt-4 flex justify-end gap-2">
           <button @click="closeEdit" class="btn-ghost">Cancel</button>
-          <button @click="saveEdit" class="btn-primary" :disabled="(!editCompleted && !editTitle.trim()) || editSaving">{{ editSaving ? 'Saving...' : 'Save' }}</button>
+          <button @click="saveEdit" class="btn-primary" :disabled="(!editCompleted && !editTitle.trim()) || editSaving">{{ editSaving ? 'Saving' : 'Save' }}</button>
         </div>
       </div>
     </div>
@@ -150,7 +150,7 @@
         <p v-if="deleteError" class="mt-3 text-sm text-error dark:text-error">{{ deleteError }}</p>
         <div class="mt-4 flex justify-end gap-2">
           <button @click="deleteTarget = null" class="btn-ghost">Cancel</button>
-          <button @click="doDelete" class="btn-danger" :disabled="deleting">{{ deleting ? 'Deleting...' : 'Delete' }}</button>
+          <button @click="doDelete" class="btn-danger" :disabled="deleting">{{ deleting ? 'Deleting' : 'Delete' }}</button>
         </div>
       </div>
     </div>

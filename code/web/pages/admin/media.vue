@@ -3,7 +3,7 @@
     <div class="mb-6 flex items-center justify-between">
       <h1 class="font-display text-display-sm text-ink dark:text-on-dark">Admin Media</h1>
       <div class="flex gap-2">
-        <button @click="handleGenerateAll" class="btn-outline text-sm" :disabled="generatingAll">{{ generatingAll ? 'Generating...' : 'Generate All Embeddings' }}</button>
+        <button @click="handleGenerateAll" class="btn-outline text-sm" :disabled="generatingAll">{{ generatingAll ? 'Generating' : 'Generate All Embeddings' }}</button>
         <button @click="openAdd" class="btn-primary">Add Media</button>
       </div>
     </div>
@@ -23,7 +23,7 @@
     <div class="card !p-0 overflow-hidden">
       <div class="px-5 py-3 border-b border-hairline dark:border-hairline-dark flex items-center justify-between">
         <h2 class="text-sm font-medium text-ink dark:text-on-dark">Media Library</h2>
-        <input v-model="search" class="input w-64" placeholder="Search..." />
+        <input v-model="search" class="input w-64" placeholder="Search" />
       </div>
       <div v-if="media.length === 0" class="py-12 text-center text-sm text-ink-soft dark:text-on-dark-soft/70">No media yet. Click "Add Media" to create one.</div>
       <div v-else class="overflow-x-auto">
@@ -42,7 +42,7 @@
               <td>
                 <div class="flex gap-1">
                   <button v-if="!m.has_embedding && !generatingId[m.id]" @click="handleGenerateOne(m.id)" class="rounded-md px-1.5 py-0.5 text-sm text-primary hover:bg-primary/10">Embed</button>
-                  <span v-if="generatingId[m.id]" class="text-sm text-ink-soft dark:text-on-dark-soft">Generating...</span>
+                  <span v-if="generatingId[m.id]" class="text-sm text-ink-soft dark:text-on-dark-soft">Generating</span>
                   <button @click="openEdit(m)" class="rounded-md px-1.5 py-0.5 text-sm text-ink-muted dark:text-on-dark-soft hover:text-primary">Edit</button>
                   <button @click="confirmDelete(m)" class="rounded-md px-1.5 py-0.5 text-sm text-error dark:text-error hover:bg-error/10">Del</button>
                 </div>
@@ -61,7 +61,7 @@
           <div><label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Title</label><input v-model="form.title" class="input" placeholder="Media title" /></div>
           <div><label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Type</label><select v-model="form.type" class="input"><option value="quote">Quote</option><option value="sutra">Sutra / Text</option><option value="article">Article</option><option value="video">Video</option><option value="audio">Audio</option></select></div>
           <div v-if="form.type === 'video'"><label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Video URL</label><input v-model="form.contentUrl" class="input" placeholder="https://youtu.be/..." /></div>
-          <div v-else><label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Content Text</label><textarea v-model="form.contentText" class="input" rows="3" placeholder="Paste full text..." /></div>
+          <div v-else><label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Content Text</label><textarea v-model="form.contentText" class="input" rows="3" placeholder="Paste full text" /></div>
           <div><label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Source</label><input v-model="form.source" class="input" placeholder="Source name" /></div>
           <div><label class="block mb-1 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Tags (comma)</label><input v-model="form.tagsInput" class="input" placeholder="tag1, tag2" /></div>
         </div>

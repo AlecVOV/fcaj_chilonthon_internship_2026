@@ -18,7 +18,7 @@
         <div><label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Password</label><input v-model="pass" type="password" class="input" placeholder="Your password" required autocomplete="current-password" /></div>
         <p v-if="successMsg" class="text-sm text-success dark:text-success">{{ successMsg }}</p>
         <p v-if="authErrorText" class="text-sm text-error dark:text-error">{{ authErrorText }}</p>
-        <button type="submit" class="btn-primary w-full" :disabled="authLoading || !email || !pass">{{ authLoading ? 'Please wait...' : 'Sign In' }}</button>
+        <button type="submit" class="btn-primary w-full" :disabled="authLoading || !email || !pass">{{ authLoading ? 'Please wait' : 'Sign In' }}</button>
         <p class="text-center"><button type="button" @click="activeTab = 'forgot'" class="text-sm text-primary hover:underline">Forgot password?</button></p>
       </form>
 
@@ -35,7 +35,7 @@
         <p class="text-xs text-ink-muted dark:text-on-dark-soft">After that you will receive an email of confirmation.</p>
         <p v-if="signupError" class="text-sm text-error dark:text-error">{{ signupError }}</p>
         <p v-if="successMsg" class="text-sm text-success dark:text-success">{{ successMsg }}</p>
-        <button type="submit" class="btn-primary w-full" :disabled="authLoading || !signupName.trim() || !signupEmail.trim() || !signupPass.trim()">{{ authLoading ? 'Creating...' : 'Create Account' }}</button>
+        <button type="submit" class="btn-primary w-full" :disabled="authLoading || !signupName.trim() || !signupEmail.trim() || !signupPass.trim()">{{ authLoading ? 'Creating' : 'Create Account' }}</button>
       </form>
 
       <!-- Forgot Password -->
@@ -43,7 +43,7 @@
         <div><label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Email</label><input v-model="forgotEmail" type="email" class="input" placeholder="you@example.com" required /></div>
         <p v-if="authErrorText" class="text-sm text-error dark:text-error">{{ authErrorText }}</p>
         <p v-if="successMsg" class="text-sm text-success dark:text-success">{{ successMsg }}</p>
-        <button type="submit" class="btn-primary w-full" :disabled="authLoading || !forgotEmail.trim()">{{ authLoading ? 'Sending...' : 'Send Reset Link' }}</button>
+        <button type="submit" class="btn-primary w-full" :disabled="authLoading || !forgotEmail.trim()">{{ authLoading ? 'Sending' : 'Send Reset Link' }}</button>
         <p class="text-center"><button type="button" @click="activeTab = 'signin'" class="text-sm text-primary hover:underline">Back to Sign In</button></p>
       </form>
     </div>

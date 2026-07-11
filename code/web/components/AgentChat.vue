@@ -1,5 +1,5 @@
 <template>
-  <div class="card flex flex-col h-[calc(100vh-14rem)]">
+  <div class="card flex flex-col h-[calc(100vh-11rem)]">
     <!-- Header -->
     <div class="pb-3 border-b border-hairline dark:border-hairline-dark">
       <h2 class="font-display text-lg text-ink dark:text-on-dark">Task Assistant</h2>
@@ -143,6 +143,9 @@ watch(() => messages.value.length, () => {
 </script>
 
 <style scoped>
+/* Scrollbar giờ theo màu theme GLOBAL ở assets/css/main.css (áp dụng toàn app), không
+   cần định nghĩa riêng ở đây nữa. */
+
 /* v-html bypass scoped styles trừ khi dùng :deep() — style nội dung markdown render ra. */
 .chat-markdown :deep(p) { margin: 0 0 0.5em; white-space: pre-wrap; }
 .chat-markdown :deep(p:last-child) { margin-bottom: 0; }

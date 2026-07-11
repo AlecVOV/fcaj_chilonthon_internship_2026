@@ -64,10 +64,10 @@
       <p class="text-sm text-ink-body dark:text-on-dark-soft">You focused for {{ Math.round((focusStore.initialDuration - focusStore.remaining) / 60) }} minutes.</p>
       <div>
         <label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">How are you feeling?</label>
-        <textarea v-model="journalText" class="input" rows="4" placeholder="I feel..." />
+        <textarea v-model="journalText" class="input" rows="4" placeholder="I feel what" />
       </div>
       <div v-if="journalText.length > 10" class="rounded-md border border-hairline dark:border-hairline-dark p-3 text-sm">
-        <p v-if="detecting" class="text-ink-soft dark:text-on-dark-soft">Analyzing...</p>
+        <p v-if="detecting" class="text-ink-soft dark:text-on-dark-soft">Analyzing</p>
         <div v-else-if="emotionResult" class="space-y-1">
           <p class="text-ink dark:text-on-dark">Detected mood: <span class="font-semibold capitalize">{{ emotionResult.label }}</span> <span class="text-ink-soft dark:text-on-dark-soft">({{ (emotionResult.confidence * 100).toFixed(0) }}%)</span></p>
         </div>
@@ -95,7 +95,6 @@ import { useTaskStore } from '~/stores/task.store'
 import { useDataService } from '~/composables/useDataService'
 import { useEmotionDetector } from '~/composables/useEmotionDetector'
 import { useRAG } from '~/composables/useRAG'
-import { useAmbientSound } from '~/composables/useAmbientSound'
 import { useAmbientSounds, type AmbientSound } from '~/composables/useAmbientSounds'
 import dayjs from 'dayjs'
 
@@ -117,7 +116,6 @@ const recentSessions = ref<any[]>([])
 const saveError = ref('')
 const saving = ref(false)
 
-const ambient = useAmbientSound()
 const { listSounds } = useAmbientSounds()
 const ambientSounds = ref<AmbientSound[]>([])
 const durations = [{ label: '15m', seconds: 15 * 60 }, { label: '25m', seconds: 25 * 60 }, { label: '45m', seconds: 45 * 60 }]
@@ -128,12 +126,9 @@ const selectedAmbientLabel = computed(() => {
   return ambientSounds.value.find(s => s.url === url)?.name || 'Ambient'
 })
 
-// Ambient audio follows the timer lifecycle (also covers a session restored after reload).
-watch(() => focusStore.status, (s) => {
-  if (s === 'running') ambient.play(focusStore.ambientTrack)
-  else ambient.stop()
-}, { immediate: true })
-onBeforeUnmount(() => ambient.stop())
+// Ambient audio follows the timer lifecycle -- xử lý ở app.vue (luôn mount, sống qua
+// điều hướng trang) chứ KHÔNG ở đây, để nhạc không bị dừng khi rời trang Focus sang
+// dashboard/tasks/agent giữa phiên đang chạy.
 
 onMounted(async () => {
   await taskStore.fetchTasks()
@@ -163,8 +158,7 @@ async function saveJournal() {
     saving.value = false
     return
   }
-  ambient.stop()
   navigateTo('/dashboard')
 }
-function skipJournal() { ambient.stop(); focusStore.reset(); navigateTo('/dashboard') }
+function skipJournal() { focusStore.reset(); navigateTo('/dashboard') }
 </script>

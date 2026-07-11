@@ -32,7 +32,7 @@
         <p class="text-2xs text-ink-soft dark:text-on-dark-soft/70">Changing your email takes effect immediately and updates your login email (the new email must not already be in use).</p>
         <div class="flex justify-end gap-2">
           <button @click="editingAccount = false" class="btn-ghost">Cancel</button>
-          <button @click="saveAccount" class="btn-primary" :disabled="accSaving || !accName.trim() || !accEmail.trim()">{{ accSaving ? 'Saving...' : 'Save' }}</button>
+          <button @click="saveAccount" class="btn-primary" :disabled="accSaving || !accName.trim() || !accEmail.trim()">{{ accSaving ? 'Saving' : 'Save' }}</button>
         </div>
       </div>
 

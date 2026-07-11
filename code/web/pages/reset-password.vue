@@ -22,19 +22,19 @@
       <form v-else-if="ready" @submit.prevent="handleSubmit" class="space-y-4">
         <div>
           <label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Mật khẩu mới</label>
-          <input v-model="password" type="password" class="input" placeholder="Tối thiểu 6 ký tự" minlength="6" required autocomplete="new-password" />
+          <input v-model="password" type="password" class="input" placeholder="Minimum 6 characters" minlength="6" required autocomplete="new-password" />
         </div>
         <div>
           <label class="block mb-1.5 text-xs font-medium text-ink-muted dark:text-on-dark-soft">Xác nhận mật khẩu</label>
-          <input v-model="confirm" type="password" class="input" placeholder="Nhập lại mật khẩu" minlength="6" required autocomplete="new-password" />
+          <input v-model="confirm" type="password" class="input" placeholder="Re-enter password" minlength="6" required autocomplete="new-password" />
         </div>
         <p v-if="formError" class="text-sm text-error dark:text-error">{{ formError }}</p>
         <button type="submit" class="btn-primary w-full" :disabled="isLoading || !password || !confirm">
-          {{ isLoading ? 'Đang lưu...' : 'Đặt mật khẩu mới' }}
+          {{ isLoading ? 'Saving' : 'Enter New Password' }}
         </button>
       </form>
 
-      <p v-else class="text-center text-sm text-ink-muted dark:text-on-dark-soft">Đang xác thực liên kết...</p>
+      <p v-else class="text-center text-sm text-ink-muted dark:text-on-dark-soft">Authenticating</p>
     </div>
   </div>
 </template>
