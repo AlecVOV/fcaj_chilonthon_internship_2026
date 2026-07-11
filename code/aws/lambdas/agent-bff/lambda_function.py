@@ -10,6 +10,15 @@ XÁC THỰC (in-Lambda, giống ambient-audio-manager):
   Model KHÔNG BAO GIỜ điền userId (không có trong OpenAPI action group) -> chống
   confused-deputy: user A không thể nhờ agent thao tác cho user B.
 
+NGÀY HIỆN TẠI: Bedrock Agent không tự biết "hôm nay" là ngày nào -> mỗi lần gọi đều tính
+  lại datetime.now() theo giờ VN (UTC+7 cố định) và gửi currentDate (YYYY-MM-DD) +
+  currentDayOfWeek. GỬI QUA `promptSessionAttributes`, KHÔNG PHẢI `sessionAttributes` --
+  2 field khác nhau: sessionAttributes chỉ tới được Lambda action group (event), model
+  KHÔNG thấy; promptSessionAttributes mới được chèn vào prompt gửi cho model. Nhầm field
+  này -> model không thấy ngày, tự bịa năm (đã dính bug này 2026-07-11, đã sửa).
+  agent-instructions.txt dạy agent dùng 2 giá trị này để suy luận ngày user nói thiếu
+  năm/tương đối ("15/07", "thứ 6 tới") thay vì đoán mò.
+
 CHỐNG SESSION HIJACK: sessionId LUÔN được namespace theo user_id
   (session_id = "{user_id}::{client_sid}") -> client không thể đọc/ghi hội thoại
   hay session-state của user khác.
@@ -33,7 +42,12 @@ import re
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timedelta, timezone
 import boto3
+
+# Gio VN = UTC+7 co dinh (khong co DST) -- dung offset thang, KHONG dung zoneinfo/'Asia/Ho_Chi_Minh'
+# vi Lambda runtime co the thieu goi tzdata he thong -> ZoneInfoNotFoundError luc chay.
+APP_TZ = timezone(timedelta(hours=7))
 
 REGION = os.environ.get('AWS_REGION', 'ap-southeast-1')
 AGENT_ID = os.environ.get('BEDROCK_AGENT_ID', '')
@@ -42,7 +56,7 @@ SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', '').split(',') if o.strip()]
 MAX_INPUT = 4000
-AGENT_DAILY_LIMIT = int(os.environ.get('AGENT_DAILY_LIMIT', '2'))
+AGENT_DAILY_LIMIT = int(os.environ.get('AGENT_DAILY_LIMIT', '10')) #Sửa lại tăng số lần để test lambda
 
 bedrock = boto3.client('bedrock-agent-runtime', region_name=REGION)
 
@@ -163,12 +177,23 @@ def handler(event, context):
         if not (AGENT_ID and AGENT_ALIAS_ID):
             return _resp(503, {'message': 'Bedrock Agent chưa cấu hình (BEDROCK_AGENT_ID/ALIAS_ID).'}, event)
 
+        # Bedrock Agent khong tu biet "hom nay" -- phai tu gui vao promptSessionAttributes
+        # (KHONG PHAI sessionAttributes -- field do model khong doc duoc, chi Lambda doc
+        # duoc qua event) moi lan goi (tinh lai theo gio VN) de agent suy luan dung
+        # ngay/thang thieu nam.
+        now_vn = datetime.now(APP_TZ)
         resp = bedrock.invoke_agent(
             agentId=AGENT_ID,
             agentAliasId=AGENT_ALIAS_ID,
             sessionId=session_id,
             inputText=input_text,
-            sessionState={'sessionAttributes': {'userId': user_id}},
+            sessionState={
+                'sessionAttributes': {'userId': user_id},
+                'promptSessionAttributes': {
+                    'currentDate': now_vn.strftime('%Y-%m-%d'),
+                    'currentDayOfWeek': now_vn.strftime('%A'),
+                },
+            },
         )
         completion = ''
         for evt in resp.get('completion', []):
