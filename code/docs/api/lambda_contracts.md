@@ -1,6 +1,6 @@
 # Lambda Function Contracts — Detailed Request/Response
 
-> Cập nhật 2026-06-29 — đồng bộ với bản cài đặt hiện tại (trạng thái implement đã ghi rõ).
+> Cập nhật 2026-07-12 — đồng bộ với bản cài đặt hiện tại (trạng thái implement đã ghi rõ).
 
 > **Project:** Focus Mode App  
 > **Architecture:** Event-Driven Serverless on AWS Free Tier  
@@ -13,7 +13,7 @@
 |---|---|---|
 | `agent-bff` | **CÓ code** (`aws/lambdas/agent-bff/lambda_function.py`, có `deploy.sh`) | BFF gọi Bedrock InvokeAgent. CHƯA mô tả contract chi tiết trong file này — xem README của hàm. |
 | `agent-action-handler` | **CÓ code** (`aws/lambdas/agent-action-handler/lambda_function.py`, có `deploy.sh`) | Action Group của Bedrock Agent: create/update/delete task trong Supabase. |
-| `emotion-detector` | **MỚI README** (chưa có `lambda_function.py`) | Mục 1 dưới đây là spec. |
+| `emotion-detector` | **ĐÃ DEPLOY & LIVE (2026-07-12)** (`aws/lambdas/emotion-detector/lambda_function.py`) | DistilBERT ONNX đóng gói trong Lambda (không qua Bedrock). Mục 1 dưới đây mô tả contract THẬT. Test qua `curl` với token thật trả 200, CloudWatch không lỗi. |
 | `rag-recommender` | **MỚI README** (chưa có `lambda_function.py`) | Mục 2 dưới đây là spec. |
 | `admin-vectorizer` | **MỚI README** (chưa có `lambda_function.py`) | Mục 4 dưới đây là spec. |
 | Agentic Suggestions (`focus-ai-suggestions`) | **Chỉ spec** (chưa có thư mục/code) | Mục 3 dưới đây là spec đề xuất. |
@@ -22,65 +22,63 @@
 
 > **`report-generator` đã bị bỏ khỏi kế hoạch (2026-07-10)** — folder Lambda + spec đã xóa. Export report giờ chạy **thuần client-side**, xem bullet "Report" bên dưới.
 
-> **Lưu ý route:** OpenAPI spec dùng `/emotion/detect`, `/rag/recommend`, `/admin/vectorize`, `/agent/chat`. Frontend hiện gọi các route rút gọn `/emotion`, `/rag`, `/agent/chat`. Khi deploy thật cần thống nhất route giữa hai bên.
+> **Lưu ý route:** `/emotion` đã khớp giữa `openapi.yaml` và frontend. `/rag/recommend`,
+> `/admin/vectorize` trong OpenAPI spec vẫn lệch với route rút gọn frontend gọi (`/rag`, `/admin` hoặc
+> `/embed`) — khi deploy 2 lambda đó cần thống nhất route giữa hai bên trước.
 
 ## Frontend fallback (khi chưa có API Gateway URL)
 
-- **Emotion** (`web/composables/useEmotionDetector.ts`): có URL → `POST {API}/emotion`; thiếu URL → phân loại bằng **regex client-side** (nhãn: focused/stressed/exhausted/relaxed).
+- **Emotion** (`web/composables/useEmotionDetector.ts`): **ĐÃ DEPLOY & LIVE** — có URL → `POST {API}/emotion` kèm `Authorization: Bearer <access_token>`; chỉ rơi về **regex client-side** (đủ cả 5 nhãn kể cả `unmotivated`) nếu thiếu URL trong env.
 - **RAG** (`web/composables/useRAG.ts`): có URL → `POST {API}/rag`; thiếu URL/ lỗi → trả **2 item hardcode** (On Patience – sutra; 5‑Minute Breathing – video).
 - **Report** (`web/composables/useReportExport.ts`): **KHÔNG gọi API nào nữa** (đổi 2026-07-10) — luôn render Markdown + tải `.md` thuần client-side; không còn khái niệm "fallback", đây là đường duy nhất.
 - **Agent chat** (`web/composables/useAgentChat.ts`): **bắt buộc** API Gateway URL; thiếu URL → **báo lỗi** "AI agent backend is not configured" (không có mock).
 
 ---
 
-## 1. Emotion Detection Lambda (`focus-emotion-detector`)
+## 1. Emotion Detection Lambda (`emotion-detector`) — ĐÃ DEPLOY & LIVE
 
-> **Status:** MỚI README (chưa có `lambda_function.py`). Spec dưới đây. Frontend hiện fallback regex client-side khi thiếu API Gateway URL. Nhãn cảm xúc chuẩn: `focused`, `stressed`, `exhausted`, `relaxed`, `unmotivated`.
+> **Status:** **ĐÃ DEPLOY & LIVE** (`aws/lambdas/emotion-detector/lambda_function.py`, 2026-07-12).
+> Test qua `curl` với token thật trả 200 + CloudWatch không lỗi. Frontend chỉ fallback regex
+> client-side nếu thiếu API Gateway URL trong env. Nhãn app: `focused`, `stressed`, `exhausted`, `relaxed`,
+> `unmotivated`. **Stateless** — Lambda KHÔNG ghi Supabase, frontend tự lưu.
 
 | Property | Value |
 |---|---|
 | **Runtime** | Python 3.12 |
-| **Trigger** | API Gateway `POST /emotion/detect` |
-| **Memory** | 512 MB (Free Tier limit) |
+| **Trigger** | API Gateway `POST /emotion` |
+| **Memory** | 512 MB |
 | **Timeout** | 15 seconds |
-| **Package** | `onnxruntime`, `transformers[torch]`, `psycopg2-binary` |
-| **Model** | `distilbert-base-uncased-emotion` (quantized ONNX, ~82 MB) |
+| **Package** | `onnxruntime`, `numpy`, `tokenizers` (KHÔNG có `transformers`/`torch`/`psycopg2` lúc runtime) |
+| **Model** | `bhadresh-savani/distilbert-base-uncased-emotion` (quantized ONNX INT8, ~80-90 MB), đóng gói thẳng trong Lambda zip qua S3 (không Lambda Layer) |
+| **Auth** | In-Lambda, giống `agent-bff`/`ambient-audio-manager` (Bearer token → PostgREST verify) |
 
 ### Request
 
 ```json
-POST /emotion/detect
-Authorization: Bearer <supabase_jwt>
+POST /emotion
+Authorization: Bearer <supabase_access_token>
 Content-Type: application/json
 
 {
-  "journal_text": "Today I was extremely focused on my thesis. Finished 3 chapters!",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000"
+  "text": "Today I was extremely focused on my thesis. Finished 3 chapters!"
 }
 ```
 
 ### Processing
 
-1. Validate JWT (Supabase public key).
-2. Load ONNX model from `/opt/model/distilbert-emotion.onnx` (Lambda Layer).
-3. Tokenize `journal_text` (max 512 tokens) using HuggingFace tokenizer.
-4. Run inference → softmax → map to 5 labels:
-   - `0`: focused
-   - `1`: stressed
-   - `2`: exhausted
-   - `3`: relaxed
-   - `4`: unmotivated
-5. Update `public.focus_sessions` row: set `emotion_label` and `emotion_confidence`.
-6. (Optional) Generate 384-dim embedding via `all-MiniLM-L6-v2` for downstream RAG.
+1. Verify token in-Lambda: `GET {SUPABASE_URL}/rest/v1/users?id=eq.{sub}` với Bearer token đó (PostgREST verify chữ ký ES256 + RLS) — KHÔNG dùng JWT authorizer của API Gateway.
+2. Load model ONNX + tokenizer 1 lần lúc cold start (`onnxruntime` + `tokenizers`, cache module-level).
+3. Tokenize `text` (max 256 tokens, truncate + pad); text input bị cắt còn ≤1000 ký tự trước đó (không reject).
+4. Run inference → softmax → argmax → nhãn gốc model (6 lớp: `sadness, joy, love, anger, fear, surprise`).
+5. Map sang nhãn app qua bảng xấp xỉ thủ công `MAP_TO_APP_LABEL` (`joy→focused`, `love→relaxed`, `surprise→focused`, `anger→stressed`, `fear→stressed`, `sadness→exhausted`); confidence dưới `THRESHOLD_UNMOTIVATED` (mặc định 0.35) → gán `unmotivated`.
+6. Trả kết quả — **không ghi DB**. Frontend tự lưu `emotion_label`/`emotion_confidence` cùng lúc lưu session.
 
 ### Response (200 OK)
 
 ```json
 {
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "emotion_label": "focused",
-  "confidence": 0.91,
-  "embedding_vector": null
+  "label": "focused",
+  "confidence": 0.91
 }
 ```
 
@@ -88,9 +86,11 @@ Content-Type: application/json
 
 | Status | Body |
 |---|---|
-| 400 | `{"error": "BadRequest", "message": "journal_text is required and must be ≤ 1000 chars"}` |
-| 401 | `{"error": "Unauthorized", "message": "Invalid or expired JWT"}` |
-| 500 | `{"error": "InternalError", "message": "Model inference failed: <reason>"}` |
+| 401 | Token thiếu/hết hạn/không hợp lệ (verify qua PostgREST thất bại) |
+| 500 | Lỗi inference hoặc lỗi không mong đợi khác |
+
+> ⚠️ Mapping 6→5 nhãn là **xấp xỉ**, không phải phân loại chính xác cao — chi tiết + lý do xem
+> `aws/lambdas/emotion-detector/README.md`.
 
 ---
 

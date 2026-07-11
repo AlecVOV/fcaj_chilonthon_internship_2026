@@ -1,0 +1,8 @@
+# Deps CHO prepare_model.py (chay 1 lan o may local de export + quantize model).
+# KHONG dong goi vao Lambda -- torch/transformers/optimum rat nang (~1-2 GB), chi
+# can luc chuan bi model, khong can luc Lambda chay that (xem requirements.txt).
+torch>=2.2
+transformers[sentencepiece]>=4.41
+optimum[onnxruntime]>=1.17
+onnx>=1.16
+onnxruntime>=1.18

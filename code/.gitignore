@@ -36,6 +36,12 @@ aws/**/function.zip
 aws/**/package/
 aws/**/log.txt
 
+# ── Python venv + model artifact cho lambda có bước "prepare model" local
+# (vd emotion-detector: venv_prepare/venv_runtime nặng ~1-2GB; model/ chứa .onnx
+# ~80-90MB tải/export từ HuggingFace — tự chạy prepare_model.py để tạo lại, KHÔNG commit) ──
+aws/**/venv*/
+aws/**/model/
+
 # ── Python cache ───────────────────────────────
 __pycache__/
 *.pyc

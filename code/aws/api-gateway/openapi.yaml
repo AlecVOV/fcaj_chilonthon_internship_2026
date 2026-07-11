@@ -49,12 +49,12 @@ paths:
                   sessionId: { type: string }
                   responseText: { type: string }
 
-  /emotion/detect:
+  /emotion:
     post:
-      summary: Detect emotion from journal text
+      summary: Detect emotion from journal text (DistilBERT ONNX, packaged in Lambda)
       operationId: detectEmotion
       x-amazon-apigateway-integration:
-        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:focus-emotion-detector/invocations
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:emotion-detector/invocations
         httpMethod: POST
         type: aws_proxy
       requestBody:
@@ -63,19 +63,18 @@ paths:
           application/json:
             schema:
               type: object
-              required: [journal_text]
+              required: [text]
               properties:
-                journal_text: { type: string, maxLength: 1000 }
-                session_id: { type: string }
+                text: { type: string, maxLength: 1000, description: Journal text to classify }
       responses:
         '200':
-          description: Emotion label + confidence
+          description: Emotion label + confidence (stateless — Lambda does not write to Supabase; frontend saves it with the session)
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  emotion_label: { type: string }
+                  label: { type: string, description: "One of focused, stressed, exhausted, relaxed, unmotivated" }
                   confidence: { type: number }
 
   /rag/recommend:

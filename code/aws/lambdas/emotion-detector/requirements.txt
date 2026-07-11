@@ -1,0 +1,6 @@
+# Runtime deps -- day la nhung gi thuc su duoc dong goi VAO Lambda zip.
+# KHONG co torch/transformers/optimum o day (chi can luc export model 1 lan,
+# xem prepare-requirements.txt) -- giu Lambda nho + cold start nhanh.
+onnxruntime>=1.18,<2
+numpy>=1.26,<3
+tokenizers>=0.19,<1

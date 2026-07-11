@@ -1,15 +1,28 @@
 # NLP Emotion Detection — Model & Pipeline
 
-> Cập nhật 2026-06-29 — đồng bộ với bản cài đặt hiện tại (trạng thái implement đã ghi rõ).
+> Cập nhật 2026-07-12 — đồng bộ với bản cài đặt hiện tại (trạng thái implement đã ghi rõ).
 
 > **Project:** Focus Mode App  
-> **Model:** `distilbert-base-uncased-emotion` (quantized ONNX)  
-> **Labels:** 5 categories — `focused`, `stressed`, `exhausted`, `relaxed`, `unmotivated`  
-> **Runtime:** AWS Lambda (Python 3.12) with ONNX Runtime  
-> **Input:** Journal text (max 1000 chars)  
-> **Output:** Emotion label + confidence score  
+> **Model:** `bhadresh-savani/distilbert-base-uncased-emotion` (quantized ONNX INT8), đóng gói THẲNG trong Lambda — không qua Bedrock, không qua Lambda Layer  
+> **Labels model gốc (6 lớp):** `sadness, joy, love, anger, fear, surprise` — map thủ công/xấp xỉ sang 5 nhãn app  
+> **Labels app (5 categories):** `focused`, `stressed`, `exhausted`, `relaxed`, `unmotivated`  
+> **Runtime:** AWS Lambda (Python 3.12) with ONNX Runtime + `tokenizers` (KHÔNG dùng `transformers`/`torch` lúc chạy thật)  
+> **Input:** `{ "text": "..." }` (journal text, max 1000 chars, truncate không reject)  
+> **Output:** `{ "label": "...", "confidence": 0.xx }` — **stateless**, Lambda KHÔNG ghi DB, frontend tự lưu cùng session  
 
-> **Status (2026-06-29):** Đây là **SPEC**. Lambda `emotion-detector` mới chỉ có **README** (chưa có `lambda_function.py`); layer `onnx-transformers` chỉ là spec; API Gateway có spec nhưng **CHƯA deploy**. Trên thực tế, nhận diện cảm xúc hiện chạy **fallback regex client-side** trong `web/composables/useEmotionDetector.ts`: nếu có `NUXT_PUBLIC_API_GATEWAY_URL` thì `POST {API}/emotion`, nếu không thì phân loại bằng biểu thức chính quy ngay trên trình duyệt (hiện chỉ phát ra focused/stressed/exhausted/relaxed; chưa có nhánh `unmotivated` ở fallback, mặc định về `focused`). Backend khi deploy sẽ ghi `emotion_label` + `emotion_confidence` vào `public.focus_sessions` của Supabase (cloud-only).
+> **Status (2026-07-12):** **ĐÃ DEPLOY & LIVE.** `aws/lambdas/emotion-detector/` có đủ
+> `lambda_function.py` (handler thật) + `prepare_model.py` (export model, chạy 1 lần local) +
+> `test_local.py` + `DEPLOY-cmd.md` (runbook AWS đầy đủ). Route `POST /emotion` đã deploy trên HTTP
+> API `ffepnb6gei`, test qua `curl` với token thật trả 200 + CloudWatch không có lỗi. Frontend
+> (`web/composables/useEmotionDetector.ts`) tự gọi `POST {API}/emotion` kèm
+> `Authorization: Bearer <access_token>` khi có `emotionApiUrl`/`apiGatewayUrl`; chỉ rơi về
+> **fallback regex client-side** nếu thiếu biến env đó (ví dụ môi trường local chưa set).
+>
+> **⚠️ Về độ chính xác của mapping 6→5 nhãn:** không tồn tại model public fine-tune sẵn cho đúng 5
+> nhãn năng suất của app này — bảng `MAP_TO_APP_LABEL` trong `lambda_function.py` là **xấp xỉ thủ
+> công** (`joy→focused`, `love→relaxed`, `surprise→focused`, `anger→stressed`, `fear→stressed`,
+> `sadness→exhausted`), cộng thêm heuristic confidence-thấp→`unmotivated`. Chi tiết xem
+> `aws/lambdas/emotion-detector/README.md`.
 
 ---
 
@@ -18,9 +31,9 @@
 | Criterion | Choice | Reason |
 |---|---|---|
 | **Architecture** | DistilBERT | 40% smaller than BERT-base, 60% faster inference, ~97% of accuracy |
-| **Format** | ONNX (quantized INT8) | Smaller deployment package (~82 MB vs ~260 MB PyTorch); faster cold start on Lambda |
-| **Labels** | 5 custom emotions | Aligned with productivity context: focused, stressed, exhausted, relaxed, unmotivated |
-| **Fallback** | Hugging Face Inference API | Used if ONNX model fails to load (free tier: 30k chars/month) |
+| **Format** | ONNX (quantized INT8) | Smaller deployment package (~80-90 MB vs ~260 MB PyTorch); faster cold start on Lambda |
+| **Labels** | 6 nhãn gốc model → map xấp xỉ sang 5 nhãn app | Model gốc không có sẵn 5 nhãn năng suất đúng như app cần — xem §2 và cảnh báo đầu file |
+| **Fallback khi chưa deploy** | Regex client-side (`useEmotionDetector.ts`) | KHÔNG phải AI — chỉ tạm dùng tới khi Lambda được deploy |
 
 ## 2. Emotion Labels
 
@@ -34,191 +47,88 @@
 
 ## 3. AWS Lambda Deployment Package
 
-### 3.1 Directory Structure
+> Đây không còn là spec — đây là mô tả code THẬT trong `aws/lambdas/emotion-detector/`. Đọc code gốc
+> nếu cần chi tiết, phần dưới chỉ tóm tắt cho dễ tra cứu.
+
+### 3.1 Directory Structure (thật)
 
 ```
-focus-emotion-lambda/
-├── lambda_function.py          # Entry point
-├── requirements.txt
-├── model/
-│   ├── config.json             # Tokenizer config
-│   ├── vocab.txt               # DistilBERT vocabulary
-│   └── model_quantized.onnx    # Quantized ONNX model (~82 MB)
-└── layer/
-    └── python/
-        ├── onnxruntime/        # ONNX Runtime for Lambda
-        └── transformers/       # HuggingFace tokenizers only
+aws/lambdas/emotion-detector/
+├── lambda_function.py          # Handler thật — deploy vào Lambda
+├── prepare_model.py            # Chạy 1 LẦN ở máy local để export model (KHÔNG deploy)
+├── test_local.py               # Test nhanh trên máy, không cần AWS
+├── requirements.txt            # Deps RUNTIME (đóng gói vào Lambda)
+├── prepare-requirements.txt    # Deps để CHUẨN BỊ model (KHÔNG đóng gói vào Lambda)
+├── README.md
+├── DEPLOY-cmd.md                # Runbook deploy đầy đủ (Windows cmd)
+└── model/                       # Sinh ra bởi prepare_model.py, KHÔNG commit git
+    ├── model_quantized.onnx     # ~80-90 MB, INT8 quantized
+    ├── tokenizer.json
+    └── config.json
 ```
 
-### 3.2 Lambda Function (`lambda_function.py`)
+### 3.2 Lambda Function (`lambda_function.py`) — tóm tắt thật
 
-```python
-import json
-import os
-import numpy as np
-import onnxruntime as ort
-from transformers import AutoTokenizer
-import psycopg2
-from supabase import create_client
+- Xác thực token Supabase **in-Lambda** (cùng pattern `agent-bff`/`ambient-audio-manager`): lấy
+  `Authorization: Bearer <token>`, gọi `GET {SUPABASE_URL}/rest/v1/users?id=eq.{sub}` để PostgREST
+  verify chữ ký ES256 + RLS. KHÔNG dùng JWT authorizer của API Gateway (không hỗ trợ ES256).
+- Load model + tokenizer **1 lần** lúc cold start (`_load_model()`, cache module-level), dùng
+  `onnxruntime.InferenceSession(providers=['CPUExecutionProvider'])` + `tokenizers.Tokenizer.from_file()`
+  — KHÔNG dùng `transformers.AutoTokenizer` lúc runtime (chỉ dùng lúc `prepare_model.py`).
+- `_classify(text)`: tokenize (max 256 token, truncation+padding) → ONNX inference → softmax →
+  argmax → map nhãn gốc (6 lớp) sang nhãn app (5 lớp) qua `MAP_TO_APP_LABEL`; confidence dưới
+  `THRESHOLD_UNMOTIVATED` (mặc định 0.35) → gán `unmotivated`.
+- `handler(event, context)`: passthrough OPTIONS (CORS) → verify user → parse `{ "text": "..." }`
+  từ body (giới hạn 1000 ký tự, **truncate không reject**) → trả `{ "label": "...", "confidence": 0.xx }`.
+  **KHÔNG ghi Supabase** — stateless theo thiết kế; frontend tự lưu `emotion_label`/`emotion_confidence`
+  cùng lúc lưu session.
 
-# --- INIT (runs once per cold start) ---
-MODEL_PATH = os.environ.get("MODEL_PATH", "/opt/model/model_quantized.onnx")
-TOKENIZER_PATH = os.environ.get("TOKENIZER_PATH", "/opt/model")
+Code đầy đủ: `aws/lambdas/emotion-detector/lambda_function.py`.
 
-# Emotion labels in model output order
-EMOTION_LABELS = ["focused", "stressed", "exhausted", "relaxed", "unmotivated"]
-
-# Load ONNX model
-session = ort.InferenceSession(MODEL_PATH)
-tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
-
-# Supabase client (service_role for DB writes)
-supabase = create_client(
-    os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-)
-
-def detect_emotion(journal_text: str) -> dict:
-    """Run ONNX inference and return label + confidence."""
-    # Tokenize
-    inputs = tokenizer(
-        journal_text,
-        max_length=512,
-        truncation=True,
-        padding="max_length",
-        return_tensors="np"
-    )
-
-    # ONNX inference
-    ort_inputs = {
-        "input_ids": inputs["input_ids"],
-        "attention_mask": inputs["attention_mask"]
-    }
-    logits = session.run(None, ort_inputs)[0]
-
-    # Softmax → probabilities
-    probs = np.exp(logits) / np.sum(np.exp(logits), axis=1, keepdims=True)
-    pred_idx = int(np.argmax(probs, axis=1)[0])
-    confidence = float(np.max(probs, axis=1)[0])
-
-    return {
-        "emotion_label": EMOTION_LABELS[pred_idx],
-        "confidence": round(confidence, 4)
-    }
-
-def lambda_handler(event, context):
-    """API Gateway entry point."""
-    try:
-        body = json.loads(event.get("body", "{}"))
-        journal_text = body.get("journal_text", "").strip()
-        session_id = body.get("session_id")
-
-        if not journal_text:
-            return {"statusCode": 400, "body": json.dumps({
-                "error": "BadRequest",
-                "message": "journal_text is required"
-            })}
-
-        if len(journal_text) > 1000:
-            journal_text = journal_text[:1000]  # Truncate
-
-        # Detect emotion
-        result = detect_emotion(journal_text)
-
-        # Update focus_sessions row in Supabase
-        if session_id:
-            supabase.table("focus_sessions").update({
-                "emotion_label": result["emotion_label"],
-                "emotion_confidence": result["confidence"],
-                "updated_at": "now()"
-            }).eq("id", session_id).execute()
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps({
-                "session_id": session_id,
-                "emotion_label": result["emotion_label"],
-                "confidence": result["confidence"]
-            })
-        }
-
-    except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "error": "InternalError",
-                "message": str(e)
-            })
-        }
-```
-
-### 3.3 `requirements.txt`
+### 3.3 `requirements.txt` (runtime thật, nhẹ — không có transformers/torch/psycopg2)
 
 ```
-onnxruntime==1.18.0
-transformers==4.41.0
-numpy==1.26.4
-supabase==2.5.1
-psycopg2-binary==2.9.9
+onnxruntime>=1.18,<2
+numpy>=1.26,<3
+tokenizers>=0.19,<1
 ```
 
-## 4. Model Conversion Pipeline (One-Time)
+## 4. Model Conversion Pipeline (One-Time, chạy bởi `prepare_model.py`)
 
-Convert the HuggingFace PyTorch model to quantized ONNX on a local machine:
+Deps riêng cho bước này nằm ở `prepare-requirements.txt` (`torch`, `transformers[sentencepiece]`,
+`optimum[onnxruntime]`, `onnx`, `onnxruntime` — nặng, ~1-2GB, **không đóng gói vào Lambda**).
 
 ```bash
-# Install optimum for ONNX export
-pip install optimum[exporters] onnx onnxruntime
+# Bước 0: tạo venv riêng, cài prepare-requirements.txt
+pip install -r prepare-requirements.txt
 
-# Export to ONNX with INT8 quantization
-optimum-cli export onnx \
-  --model distilbert-base-uncased-emotion \
-  --task text-classification \
-  --opset 14 \
-  ./model/
-
-# Quantize (reduces ~260 MB → ~82 MB)
-python -m onnxruntime.transformers.optimizer \
-  --input model/model.onnx \
-  --output model/model_quantized.onnx \
-  --quantization_mode IntegerOps
+# Bước 1: export ONNX + quantize INT8 (làm trong prepare_model.py)
+python prepare_model.py
+# -> dùng optimum.onnxruntime.ORTModelForSequenceClassification.from_pretrained(MODEL_ID, export=True)
+# -> quantize bằng onnxruntime.quantization.quantize_dynamic()
+# -> lưu tokenizer.json qua AutoTokenizer.from_pretrained(MODEL_ID).save_pretrained(OUT_DIR)
+# -> in ra id2label thật của model để đối chiếu MODEL_LABELS trong lambda_function.py
 ```
 
-## 5. Cold Start Optimization
+Chi tiết đầy đủ (gồm cả bước đóng gói zip qua S3 vì >50MB, deploy Lambda, nối API Gateway) xem
+`aws/lambdas/emotion-detector/DEPLOY-cmd.md`.
+
+## 5. Cold Start
 
 | Technique | Detail |
 |---|---|
-| **Lambda Layer** | ONNX runtime + tokenizer in a Lambda Layer (~45 MB zipped) |
-| **Provisioned Concurrency** | Not used (Free Tier constraint); expect 1-3s cold start |
-| **Lazy Loading** | Model loaded in global scope (outside handler) — reused across warm invocations |
-| **Memory** | 512 MB (sufficient for DistilBERT-ONNX; ~300 MB peak usage) |
-| **Timeout** | 15 seconds (enough for cold start + inference) |
+| **Lambda Layer** | KHÔNG dùng — deps đóng gói thẳng vào function zip (giống `agent-action-handler`) |
+| **Provisioned Concurrency** | Không dùng (Free Tier); cold start ước tính vài giây do model load |
+| **Lazy Loading** | Model + tokenizer load 1 lần trong `_load_model()`, cache module-level — tái dùng ở warm invocation |
+| **Memory** | 512 MB |
+| **Timeout** | 15 giây |
 
-## 6. Fallback to HuggingFace Inference API
+## 6. Testing
 
-If ONNX model fails (e.g., corrupted layer), fall back to HF Inference API:
+`test_local.py` chạy 5 câu test (1 câu/nhãn) thẳng qua `_classify()`, không cần deploy AWS — dùng
+trước khi zip/upload Lambda. Test cases tham khảo:
 
-```python
-import requests
-
-HF_API_URL = "https://api-inference.huggingface.co/models/distilbert-base-uncased-emotion"
-HF_HEADERS = {"Authorization": f"Bearer {os.environ['HF_API_TOKEN']}"}
-
-def detect_emotion_fallback(text: str) -> dict:
-    resp = requests.post(HF_API_URL, headers=HF_HEADERS, json={"inputs": text})
-    result = resp.json()[0][0]  # Top result
-    return {
-        "emotion_label": result["label"],
-        "confidence": round(result["score"], 4)
-    }
-```
-
-## 7. Testing
-
-See `testing-plan.md`. Test cases:
-
-- **Happy path:** "I was completely focused" → `focused` (confidence > 0.7)
-- **Empty input:** → 400 error
-- **Max length:** 1000+ chars truncated to 1000
-- **Mixed emotion:** "Focused at first but exhausted by the end" → picks dominant
-- **Non-English:** Model works on English; Vietnamese journal text would need a different model
+- **Happy path:** "I was completely focused" → nhãn app hợp lý (qua mapping 6→5, xem cảnh báo đầu file)
+- **Max length:** text >1000 ký tự bị truncate còn 1000 (không reject)
+- **Non-English:** model gốc train tiếng Anh; journal tiếng Việt sẽ kém chính xác hơn (ngoài phạm vi hiện tại)
+- **Sau khi deploy thật:** `curl` theo `DEPLOY-cmd.md` Bước 7 để test qua API Gateway thật.

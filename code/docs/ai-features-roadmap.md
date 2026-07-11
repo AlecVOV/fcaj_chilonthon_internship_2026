@@ -1,19 +1,24 @@
 # AI Features Roadmap — các tính năng AI còn lại (kế hoạch implement)
 
-> Trạng thái 2026-07-10. **App đã chạy đầy đủ** — 3 tính năng dưới đây (emotion/vectorizer/rag)
+> Trạng thái 2026-07-12. **App đã chạy đầy đủ** — 2 tính năng dưới đây (vectorizer/rag)
 > đều có **fallback client** nên là *nâng cấp*, không phải blocker. Đã deploy: **Bedrock Task
-> Agent** + **Ambient Sound**. `report-generator` đã bị bỏ khỏi kế hoạch (export report giờ
+> Agent** + **Ambient Sound** + **Emotion Detector**. `emotion-detector` **ĐÃ DEPLOY & LIVE**
+> (DistilBERT ONNX đóng gói trong Lambda, xem `aws/lambdas/emotion-detector/`) — test qua
+> `curl` với token thật trả 200, CloudWatch xác nhận không lỗi.
+> `report-generator` đã bị bỏ khỏi kế hoạch (export report giờ
 > thuần client-side, xem `docs/PROJECT_STATE.md` mục 23).
 >
 > 💡 **Nguyên tắc vàng:** phần khó duy nhất là nhét model ML vào Lambda (giới hạn layer 250MB).
 > Vì **Bedrock đã bật sẵn** (account có access Claude Haiku 4.5, có thể xin thêm Titan Embeddings),
-> nên làm các tính năng qua **Bedrock API** để tránh đóng gói ML → đa số thành Dễ/Medium.
+> nên làm 2 tính năng còn lại (vectorizer/rag) qua **Bedrock API** để tránh đóng gói ML → đa số
+> thành Dễ/Medium. `emotion-detector` **CỐ TÌNH không dùng Bedrock** — đã hỏi user, chọn giữ
+> DistilBERT ONNX (đóng gói qua S3 vì zip >50MB, không qua Lambda Layer).
 
 ## Bảng tổng quan
 
 | # | Lambda | Route (openapi) | Fallback hiện tại | Cách khôn | Effort | Phụ thuộc |
 |---|---|---|---|---|---|---|
-| 1 | emotion-detector | `POST /emotion` * | regex client | Bedrock Claude classify | 🟢 ~1h | — |
+| 1 | emotion-detector | `POST /emotion` | — (đã deploy, không còn cần fallback) | ✅ **DEPLOYED & LIVE (2026-07-12)** — DistilBERT ONNX trong Lambda | Xong | — |
 | 2 | admin-vectorizer | `POST /embed`,`/embed-all` * | nút Embed lỗi | Bedrock Titan Embeddings | 🟡 ~2-3h | migration đổi chiều vector |
 | 3 | rag-recommender | `POST /rag` * | 2 gợi ý hardcode | Titan embed query + pgvector | 🟡 ~1-2h | #2 + có nội dung media |
 | 4 | nightly aggregation | EventBridge cron | dashboard tính client | Lambda gom daily_stats | 🟢 ~1h | — (LOW priority) |
@@ -23,10 +28,10 @@
 > client-side (`useReportExport.ts`), không cần Lambda/S3/SES nữa. Xem `docs/PROJECT_STATE.md`
 > mục 23. Đây là quyết định scope, không phải thiếu sót — đừng đề xuất lại trừ khi cần email báo cáo thật.
 
-\* Frontend path/env đã chuẩn bị: emotion dùng `NUXT_PUBLIC_EMOTION_API_URL`, rag dùng
-`NUXT_PUBLIC_RAG_API_URL` (rỗng→fallback). Route trong `openapi.yaml` hiện là `/emotion/detect`,
-`/rag/recommend`, `/admin/vectorize` — **lệch** với frontend (`/emotion`, `/rag`, `/embed`); chốt 1
-hợp đồng khi làm (khuyến nghị theo frontend cho gọn).
+\* Frontend path/env đã chuẩn bị: emotion dùng `NUXT_PUBLIC_EMOTION_API_URL` (fallback về
+`apiGatewayUrl` nếu thiếu), rag dùng `NUXT_PUBLIC_RAG_API_URL` (rỗng→fallback). Route trong
+`openapi.yaml` đã khớp `/emotion`; `/rag/recommend`, `/admin/vectorize` vẫn **lệch** với frontend
+(`/rag`, `/embed`) — chốt 1 hợp đồng khi làm (khuyến nghị theo frontend cho gọn).
 
 ## Pattern dùng chung (mọi lambda mới)
 - **Auth:** route user-facing → verify token in-Lambda như `agent-bff._verify_user` (Bearer → Supabase
@@ -34,30 +39,30 @@ hợp đồng khi làm (khuyến nghị theo frontend cho gọn).
 - **Deploy:** thêm route vào HTTP API `ffepnb6gei` + `aws lambda add-permission` cho apigateway
   (xem `aws/bedrock/DEPLOY-cmd.md` Bước 10). Không dep → zip `tar`; có dep → pip `--platform manylinux2014_x86_64`.
 - **IAM:** execution role `focus-ai-lambda-role` hiện có logs + s3 + `bedrock:InvokeAgent`. **Cần thêm
-  `bedrock:InvokeModel`** (+ `GetInferenceProfile` nếu dùng global profile) cho lambda gọi Bedrock (emotion, vectorizer, rag).
+  `bedrock:InvokeModel`** (+ `GetInferenceProfile` nếu dùng global profile) cho lambda gọi Bedrock (vectorizer, rag).
+  `emotion-detector` KHÔNG cần quyền này (không gọi Bedrock, chỉ cần `logs:*`).
 - **Secret:** `SUPABASE_SERVICE_ROLE_KEY` → Secrets Manager (đừng plaintext env).
 
 ---
 
-## 1. emotion-detector (🟢 Dễ — qua Bedrock)
+## 1. emotion-detector (✅ ĐÃ DEPLOY & LIVE — DistilBERT ONNX trong Lambda)
 
-**Mục đích:** phân tích journal sau phiên focus → 1 trong 5 nhãn `focused/stressed/exhausted/relaxed/unmotivated` + confidence. Ghi vào `focus_sessions.emotion_label/emotion_confidence`.
+**Mục đích:** phân tích journal sau phiên focus → 1 trong 5 nhãn `focused/stressed/exhausted/relaxed/unmotivated` + confidence. Trả về cho frontend lưu cùng session (Lambda không tự ghi DB).
 
-**Cách:** KHÔNG dùng distilbert ONNX (layer ~120MB, khó). Dùng **Claude Haiku 4.5** (đã có) classify:
-```python
-# invoke_model / converse với prompt phân loại, temperature=0, ép JSON output
-prompt = f'''Classify the mood of this journal into EXACTLY one of:
-focused, stressed, exhausted, relaxed, unmotivated.
-Return JSON {{"emotion_label": "...", "confidence": 0.0-1.0}} only.
-Journal: """{text[:1000]}"""'''
-# bedrock-runtime.invoke_model(modelId='global.anthropic.claude-haiku-4-5-20251001-v1:0', ...)
-# parse JSON, validate label in 5 giá trị -> trả {emotion_label, confidence}
-```
-**Bước:** viết `lambda_function.py` (stdlib + boto3, verify token in-lambda) → deploy (zip tar) → thêm
-IAM `bedrock:InvokeModel` + `GetInferenceProfile` cho role → route `POST /emotion` → set
-`NUXT_PUBLIC_EMOTION_API_URL` (Amplify + .env) → sửa `useEmotionDetector.ts` gửi Authorization.
-**Gotcha:** ép model trả JSON (dùng temperature 0 + validate); quota Haiku 4.5 = 50 RPM (đủ).
-**Test:** journal "I feel overwhelmed" → `stressed`.
+**Cách:** DistilBERT (`bhadresh-savani/distilbert-base-uncased-emotion`) export ONNX + quantize INT8,
+đóng gói **thẳng trong Lambda** (không qua Bedrock, không qua Lambda Layer) — `onnxruntime` +
+`tokenizers` runtime. Đã cân nhắc đổi qua Bedrock Claude classify (nhanh/dễ hơn) nhưng **user chọn
+giữ ONNX** khi được hỏi lại (2026-07-12).
+
+Code đầy đủ: `aws/lambdas/emotion-detector/` — `lambda_function.py` (handler),
+`prepare_model.py` (export model 1 lần, chạy local), `test_local.py`, `DEPLOY-cmd.md` (runbook AWS
+đầy đủ, gồm bước qua S3 vì zip >50MB, và bẫy platform tag `manylinux2014_x86_64` đã lỗi thời cho
+onnxruntime/numpy mới — xem cảnh báo trong file). Chi tiết mapping 6→5 nhãn (xấp xỉ, không có model
+public khớp sẵn) xem `aws/lambdas/emotion-detector/README.md`.
+
+**Đã deploy (2026-07-12):** Lambda `emotion-detector` (role `focus-ai-lambda-role`, zip 83.7MB qua S3),
+route `POST /emotion` trên HTTP API `ffepnb6gei`. Test `curl` với token thật → 200 +
+`{"label":...,"confidence":...}`; không token → 401; CloudWatch không có lỗi.
 
 ## 2. admin-vectorizer — embedding (🟡 Medium — Bedrock Titan)
 
@@ -98,8 +103,8 @@ crawl/ingest tự động (bảng `media_chunks`, chunking, model đa ngữ) là
 ---
 
 ## Thứ tự đề xuất
-1. **emotion-detector (Bedrock)** — dễ nhất, không migration, nâng cấp thấy ngay ở trang Focus.
-2. **vectorizer + rag** (cặp) — quyết định chiều embedding trước (Titan 1024 + migration, HAY container MiniLM 384).
+1. ~~**emotion-detector**~~ — ✅ xong, đã deploy & live (2026-07-12).
+2. **vectorizer + rag** (cặp, còn lại duy nhất) — quyết định chiều embedding trước (Titan 1024 + migration, HAY container MiniLM 384).
 3. (tùy chọn) nightly aggregation, KB ingestion.
 
 > Khi bắt tay: theo `aws/bedrock/DEPLOY-cmd.md` (pattern deploy) + `aws/UPDATE-guide.md` (cập nhật) +

@@ -27,7 +27,7 @@ Lambda functions, API Gateway config, Bedrock Agent setup, and IAM policies.
 | 0 | `ambient-audio-manager` | HTTP API `ffepnb6gei` `$default` (no authorizer, auth in-Lambda) | 256 MB | 15s | — | ✅ **DEPLOYED** |
 | 1 | `agent-bff` | API Gateway `POST /agent/chat` → Bedrock InvokeAgent | 256 MB | 30s | Bedrock Agent (Haiku 4.5 global) | ✅ **DEPLOYED** |
 | 2 | `agent-action-handler` | Bedrock Agent Action Group → Supabase tasks (list/create/update/delete) | 512 MB | 15s | — | ✅ **DEPLOYED** |
-| 3 | `emotion-detector` | API Gateway `POST /emotion/detect` | 512 MB | 15s | distilbert ONNX | ⚪ README only — hiện app dùng fallback keyword-regex thuần client (`useEmotionDetector.ts`), KHÔNG phải AI; lambda ONNX vẫn là kế hoạch chưa làm |
+| 3 | `emotion-detector` | API Gateway `POST /emotion` | 512 MB | 15s | DistilBERT ONNX (đóng gói trong Lambda, không gọi Bedrock) | ✅ **DEPLOYED & LIVE (2026-07-12)** — test qua `curl` với token thật trả 200 + CloudWatch xác nhận không lỗi |
 | 4 | `rag-recommender` | API Gateway `POST /rag/recommend` | 512 MB | 10s | pgvector | ⚪ README only |
 | 5 | `admin-vectorizer` | API Gateway `POST /admin/vectorize` (admin) | 512 MB | 15s | MiniLM-L6-v2 | ⚪ README only |
 
@@ -35,11 +35,13 @@ Lambda functions, API Gateway config, Bedrock Agent setup, and IAM policies.
 > client-side (`web/composables/useReportExport.ts`, không qua Lambda/S3/SES); phần nightly-aggregate
 > cũng không cần nữa. Không còn folder `lambdas/report-generator/`.
 
-> **3/6 đã deploy thật**: `ambient-audio-manager` (role `ambient-audio-manager-role`),
-> `agent-bff` + `agent-action-handler` (role `focus-ai-lambda-role`) — Bedrock Agent
+> **4/6 đã deploy thật**: `ambient-audio-manager` (role `ambient-audio-manager-role`),
+> `agent-bff` + `agent-action-handler` + `emotion-detector` (role `focus-ai-lambda-role`) — Bedrock Agent
 > `task-manager-agent` (id `KKJCF9RAKJ`, alias `prod` = `K8YDCGJRW4`, model Haiku 4.5 global)
 > LIVE, action group `todo-manager-api` có 4 operation (list/create/update/delete-task).
-> Chi tiết cập nhật hệ thống: `UPDATE-guide.md`. 3 lambda còn lại (emotion/rag/vectorizer)
+> `emotion-detector` deploy qua S3 (zip 83.7 MB — vượt giới hạn CLI 50MB), route
+> `POST /emotion` trên HTTP API `ffepnb6gei` (integration `p2ikfo3`, route `u118lpg`).
+> Chi tiết cập nhật hệ thống: `UPDATE-guide.md`. 2 lambda còn lại (rag/vectorizer)
 > **chưa code, chỉ có README** — quyết định có chủ đích (xem `docs/ai-features-roadmap.md`).
 
 ## Quick Start
@@ -48,8 +50,11 @@ Lambda functions, API Gateway config, Bedrock Agent setup, and IAM policies.
    (bucket + Lambda + HTTP API + auth in-Lambda ES256 — runbook đã verify 200).
 1. **Bedrock Task Agent (ĐÃ deploy):** `bedrock/DEPLOY-cmd.md` — runbook gốc dùng để dựng từ đầu;
    để SỬA hệ thống đang chạy (đổi instructions/model/action group/env) dùng `UPDATE-guide.md`.
-2. **AI còn lại (emotion / rag / vectorizer — chưa code):** viết theo từng README; đổi
-   frontend path cho khớp openapi (đang lệch: `/emotion` vs `/emotion/detect`, `/rag` vs
+2. **Emotion detector (ĐÃ deploy — tham khảo mẫu cho lambda có bước "prepare model" nặng):**
+   `lambdas/emotion-detector/DEPLOY-cmd.md` — venv riêng để export ONNX, đóng gói qua S3 vì
+   >50MB, pitfall platform tag `manylinux2014_x86_64` đã lỗi thời cho onnxruntime/numpy mới.
+3. **AI còn lại (rag / vectorizer — chưa code):** viết theo từng README; đổi
+   frontend path cho khớp openapi (đang lệch: `/rag` vs
    `/rag/recommend`, `/embed` vs `/admin/vectorize`) và gửi `Authorization: Bearer <access_token>`.
 
 ## Post-Deploy Check
@@ -58,5 +63,8 @@ Lambda functions, API Gateway config, Bedrock Agent setup, and IAM policies.
       → 401 khi không token; 200 + danh sách file với token admin.
 - [x] **Agent (live):** `POST /agent/chat` với `Bearer <access_token>` → tạo/sửa/xóa/list task;
       bộ test prompt-injection trong `bedrock/DEPLOY-cmd.md` Bước 12.
+- [x] **Emotion (live, 2026-07-12):** `POST /emotion` không token → 401; với `Bearer <access_token>` thật →
+      200 + `{"label":...,"confidence":...}`; CloudWatch `/aws/lambda/emotion-detector` không có lỗi
+      (cold start ~5.3s, warm 1.4-2.2s, peak memory ~275MB/512MB).
 - [ ] Verify CloudWatch logs `/aws/lambda/<function>` cho từng function (định kỳ, không phải 1 lần).
 - [x] Kiểm task do agent tạo có `user_id` = user đăng nhập (KHÔNG phải id trong prompt).

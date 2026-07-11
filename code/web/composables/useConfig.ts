@@ -9,6 +9,9 @@ export function useConfig() {
     // URL riêng cho tính năng Ambient Sound (Lambda Function URL hoặc API Gateway).
     // Fallback về apiGatewayUrl nếu chưa set để tương thích ngược.
     ambientApiUrl: computed(() => (config.public.ambientApiUrl as string) || (config.public.apiGatewayUrl as string) || ''),
+    // emotion-detector dùng chung route /emotion trên cùng API Gateway (agent-bff) —
+    // fallback về apiGatewayUrl, không cần biến riêng nữa.
+    emotionApiUrl: computed(() => (config.public.emotionApiUrl as string) || (config.public.apiGatewayUrl as string) || ''),
     supabaseUrl: computed(() => config.public.supabaseUrl as string || ''),
     supabaseAnonKey: computed(() => config.public.supabaseAnonKey as string || ''),
   }
