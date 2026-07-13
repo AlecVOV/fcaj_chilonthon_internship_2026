@@ -1,0 +1,4 @@
+# admin-vectorizer chỉ dùng stdlib (urllib/base64/json/uuid) + boto3 (có sẵn trong
+# Lambda runtime python3.12). Không cần đóng gói gì; liệt kê boto3 chỉ để chạy/test
+# dưới local — deploy KHÔNG cần pip install --target, chỉ zip thẳng lambda_function.py.
+boto3>=1.34.0

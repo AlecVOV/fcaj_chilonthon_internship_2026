@@ -100,6 +100,22 @@ client-side inline nên KHÔNG bắt buộc.** Nếu làm: Lambda + EventBridge 
 Để RAG hữu ích cần `media_library` có nhiều nội dung. Hiện admin nhập tay qua CMS (đủ cho demo). Pipeline
 crawl/ingest tự động (bảng `media_chunks`, chunking, model đa ngữ) là nâng cao — làm sau nếu cần scale nội dung.
 
+> ⚠️ **Phát hiện thật (2026-07-12), lý do CHÍNH cần `media_chunks`/chunking**: `admin-vectorizer`
+> hiện cắt `title + content_text` về **2000 ký tự trước khi embed** (`MAX_INPUT_CHARS` trong
+> `lambda_function.py`) — bắt buộc, vì Bedrock Cohere Embed **chặn cứng ở 2048 ký tự/text**
+> (đã verify thật: gửi text >2048 ký tự → `ValidationException`, KHÔNG tự cắt kể cả có tham số
+> `truncate:"END"` — tham số đó chỉ cắt theo token NỘI BỘ trong giới hạn cho phép, không vượt
+> qua được rào request-validation 2048 ký tự của chính Bedrock). **Đo thật trên 1 bài giảng
+> Lamrim dài** (~19 đoạn, transcript ~1 tiếng): chỉ **4 đoạn đầu** (phần dẫn nhập) lọt vào 2000
+> ký tự đó — **15 đoạn còn lại (phần cốt lõi: Giới-Định-Tuệ, phương pháp thiền, ví dụ minh
+> hoạ...) hoàn toàn không được tính vào vector**, không lỗi, không cảnh báo, chỉ âm thầm bị bỏ
+> qua. **Không mất dữ liệu** (`content_text` vẫn lưu đủ, RAG match trúng vẫn trả full text cho
+> user đọc) — chỉ **matching kém chính xác hơn** vì vector chỉ đại diện cho đoạn mở đầu, không
+> đại diện cho toàn bộ nội dung thật của bài. Với quote/sutra ngắn thì không sao; với bài giảng
+> dài kiểu Lamrim/transcript lớp học thì đây là hạn chế thật, cần **chunking** (chia nhỏ theo
+> đoạn, mỗi đoạn 1 vector riêng trong `media_chunks`, khi search thì match theo đoạn rồi trỏ về
+> `media_id` gốc) mới xử lý triệt để — chưa làm, ghi lại đây để làm sau.
+
 ---
 
 ## Thứ tự đề xuất

@@ -9,12 +9,13 @@ info:
     này ký ES256 (asymmetric), JWT authorizer NATIVE của HTTP API chỉ hỗ trợ RS256 → sẽ
     từ chối mọi request hợp lệ. Auth thực hiện TRONG từng Lambda (lấy Bearer token, gọi
     Supabase PostgREST verify + RLS) — pattern đã chạy thật ở ambient-audio-manager,
-    agent-bff, agent-action-handler. Route admin (/admin/vectorize) thì Lambda tự check
+    agent-bff, agent-action-handler. Route admin (/embed, /embed-all) thì Lambda tự check
     role='admin'. Không có securityScheme/authorizer nào trong file này — đừng thêm lại
     kiểu JWT authorizer, nó không hoạt động với token ES256 của project này.
 
-    Trạng thái deploy: /agent/chat + 2 route /ambient/* đang chạy thật (HTTP API
-    ffepnb6gei). Các route còn lại (/emotion, /rag, /admin) là spec đích, CHƯA deploy.
+    Trạng thái deploy: /agent/chat + 2 route /ambient/* + /emotion đang chạy thật (HTTP
+    API ffepnb6gei). /rag, /embed, /embed-all CÓ CODE (aws/lambdas/rag-recommender,
+    aws/lambdas/admin-vectorizer) nhưng CHƯA deploy — xem DEPLOY-cmd.md của từng lambda.
 
 servers:
   - url: https://${API_ID}.execute-api.ap-southeast-1.amazonaws.com/prod
@@ -77,49 +78,87 @@ paths:
                   label: { type: string, description: "One of focused, stressed, exhausted, relaxed, unmotivated" }
                   confidence: { type: number }
 
-  /rag/recommend:
+  /rag:
     post:
-      summary: Get content recommendations based on emotion
+      summary: Get content recommendations based on emotion (Bedrock Cohere Embed Multilingual v3 + pgvector RPC)
       operationId: getRecommendations
       x-amazon-apigateway-integration:
-        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:focus-rag-recommender/invocations
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:rag-recommender/invocations
         httpMethod: POST
         type: aws_proxy
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [emotion]
               properties:
-                emotion: { type: string }
-                limit: { type: integer }
+                emotion: { type: string, description: "One of focused, stressed, exhausted, relaxed, unmotivated" }
+                limit: { type: integer, default: 3 }
       responses:
         '200':
-          description: Ranked recommendations
+          description: Flat array of similar media_library rows (empty array if nothing embedded yet)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    title: { type: string }
+                    content_text: { type: string }
+                    content_url: { type: string }
+                    type: { type: string }
+                    source: { type: string }
+                    similarity: { type: number }
 
-  /admin/vectorize:
+  /embed:
     post:
-      summary: Generate embedding for media item (admin only)
-      operationId: vectorizeMedia
+      summary: Generate embedding for one existing media item (admin only, Bedrock Cohere Embed Multilingual v3)
+      operationId: embedMedia
       x-amazon-apigateway-integration:
-        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:focus-admin-vectorize/invocations
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:admin-vectorizer/invocations
         httpMethod: POST
         type: aws_proxy
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
-              required: [title, content_text]
+              required: [mediaId]
               properties:
-                title: { type: string }
-                content_text: { type: string }
-                type: { type: string }
-                source: { type: string }
-                tags: { type: array, items: { type: string } }
+                mediaId: { type: string, description: "UUID of an existing public.media_library row (created separately via useDataService.createMedia)" }
       responses:
         '200':
-          description: Embedding generated
+          description: Embedding written
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mediaId: { type: string }
+                  dimensions: { type: integer }
+
+  /embed-all:
+    post:
+      summary: Generate embeddings for every media item still missing one (admin only, capped per call)
+      operationId: embedAllMedia
+      x-amazon-apigateway-integration:
+        uri: arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT}:function:admin-vectorizer/invocations
+        httpMethod: POST
+        type: aws_proxy
+      responses:
+        '200':
+          description: Number of items embedded in this call (call again if it returns MAX_BATCH, meaning more may remain)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
 
   /ambient/upload-url:
     post:

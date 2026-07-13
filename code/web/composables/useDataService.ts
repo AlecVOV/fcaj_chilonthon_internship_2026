@@ -99,6 +99,14 @@ export function useDataService() {
 
   function uid() { return currentUser.value?.id ?? '' }
 
+  // Gửi kèm access_token cho các route Lambda tự xác thực in-Lambda (không dùng
+  // JWT authorizer — xem aws/README.md). Dùng cho /embed, /embed-all (admin-only).
+  async function authHeaders(): Promise<Record<string, string>> {
+    const sb = getSupabase()
+    const { data: { session } } = await sb.auth.getSession()
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+  }
+
   // ── Tasks (read-only here; CRUD lives in stores/task.store) ──────────────
   async function getTasks(): Promise<Task[]> {
     const sb = getSupabase()
@@ -160,11 +168,11 @@ export function useDataService() {
   }
   async function generateEmbedding(mediaId: string): Promise<void> {
     if (!apiGatewayUrl.value) throw new Error('Embedding generation requires the AI backend (API Gateway not configured).')
-    await $fetch(`${apiGatewayUrl.value}/embed`, { method: 'POST', body: { mediaId } })
+    await $fetch(`${apiGatewayUrl.value}/embed`, { method: 'POST', body: { mediaId }, headers: await authHeaders() })
   }
   async function generateAllEmbeddings(): Promise<number> {
     if (!apiGatewayUrl.value) throw new Error('Embedding generation requires the AI backend (API Gateway not configured).')
-    const res = await $fetch<{ count: number }>(`${apiGatewayUrl.value}/embed-all`, { method: 'POST' })
+    const res = await $fetch<{ count: number }>(`${apiGatewayUrl.value}/embed-all`, { method: 'POST', headers: await authHeaders() })
     return res?.count ?? 0
   }
 

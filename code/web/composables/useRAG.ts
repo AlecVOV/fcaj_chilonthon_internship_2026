@@ -1,13 +1,18 @@
 // composables/useRAG.ts
+import { getSupabase } from '~/lib/supabaseClient'
+import { useConfig } from '~/composables/useConfig'
+
 export function useRAG() {
   async function getRecommendations(emotionLabel: string) {
     try {
-      const config = useRuntimeConfig()
-      // Biến RIÊNG (rỗng cho tới khi deploy rag-recommender) — tránh gọi /rag không tồn tại.
-      const apiUrl = config.public.ragApiUrl as string
+      const { ragApiUrl } = useConfig()
+      const apiUrl = ragApiUrl.value
       if (apiUrl) {
+        const { data: { session } } = await getSupabase().auth.getSession()
+        if (!session?.access_token) throw new Error('Phiên đăng nhập đã hết hạn — đăng nhập lại.')
         const response = await $fetch<any[]>(`${apiUrl}/rag`, {
           method: 'POST', body: { emotion: emotionLabel, limit: 3 },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         })
         return response
       }
