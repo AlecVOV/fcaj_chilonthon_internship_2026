@@ -53,9 +53,9 @@
         <button v-if="focusStore.isPaused" @click="focusStore.resume()" class="btn-primary">Resume</button>
         <button @click="confirmEnd" class="btn-danger">End Session</button>
       </div>
-      <div class="card text-sm space-y-1">
+      <div class="card text-sm space-y-3">
         <p class="text-ink-body dark:text-on-dark-soft"><span class="font-medium text-ink dark:text-on-dark">Task:</span> {{ focusStore.taskTitle || 'None' }}</p>
-        <p class="text-ink-body dark:text-on-dark-soft"><span class="font-medium text-ink dark:text-on-dark">Ambient:</span> {{ selectedAmbientLabel || 'Silence' }}</p>
+        <AmbientPlayer :model-value="focusStore.ambientTrack" @update:model-value="focusStore.ambientTrack = $event" />
       </div>
     </div>
 
@@ -95,7 +95,7 @@ import { useTaskStore } from '~/stores/task.store'
 import { useDataService } from '~/composables/useDataService'
 import { useEmotionDetector } from '~/composables/useEmotionDetector'
 import { useRAG } from '~/composables/useRAG'
-import { useAmbientSounds, type AmbientSound } from '~/composables/useAmbientSounds'
+import { useAmbientSound } from '~/composables/useAmbientSound'
 import dayjs from 'dayjs'
 
 definePageMeta({ middleware: ['auth'] })
@@ -116,28 +116,22 @@ const recentSessions = ref<any[]>([])
 const saveError = ref('')
 const saving = ref(false)
 
-const { listSounds } = useAmbientSounds()
-const ambientSounds = ref<AmbientSound[]>([])
 const durations = [{ label: '15m', seconds: 15 * 60 }, { label: '25m', seconds: 25 * 60 }, { label: '45m', seconds: 45 * 60 }]
-// focusStore.ambientTrack giờ là URL của file → tra ngược ra tên để hiển thị.
-const selectedAmbientLabel = computed(() => {
-  const url = focusStore.ambientTrack
-  if (!url) return 'Silence'
-  return ambientSounds.value.find(s => s.url === url)?.name || 'Ambient'
-})
 
 // Ambient audio follows the timer lifecycle -- xử lý ở app.vue (luôn mount, sống qua
 // điều hướng trang) chứ KHÔNG ở đây, để nhạc không bị dừng khi rời trang Focus sang
-// dashboard/tasks/agent giữa phiên đang chạy.
+// dashboard/tasks/agent giữa phiên đang chạy. app.vue cũng theo dõi luôn
+// focusStore.ambientTrack để đổi bài ngay khi user chọn track khác lúc đang running.
+const ambient = useAmbientSound()
 
 onMounted(async () => {
   await taskStore.fetchTasks()
   recentSessions.value = await getSessions()
   recentSessions.value.sort((a: any, b: any) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-  try { ambientSounds.value = await listSounds(true) } catch { /* nhãn ambient sẽ fallback 'Ambient' */ }
 })
 
 function startSession() {
+  ambient.stopPreview() // tránh preview + nhạc phiên phát chồng khi bấm Begin ngay sau khi nghe thử
   const title = selectedTaskId.value ? (taskStore.tasks.find(t => t.id === selectedTaskId.value)?.title ?? undefined) : undefined
   focusStore.start(selectedDuration.value, selectedTaskId.value ?? undefined, selectedAmbient.value ?? undefined, title)
 }

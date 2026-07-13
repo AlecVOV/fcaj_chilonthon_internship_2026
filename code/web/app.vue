@@ -25,6 +25,12 @@ watch(() => focusStore.status, (s) => {
   if (s === 'running') ambient.play(focusStore.ambientTrack)
   else ambient.stop()
 }, { immediate: true })
+// Đổi bài NGAY khi đang running (không chờ đổi status) -- cho phép user chọn track
+// khác giữa lúc phiên đang chạy mà không phải pause/resume. play() tự no-op nếu url
+// không đổi (so currentUrl), nên watcher này không gây restart thừa.
+watch(() => focusStore.ambientTrack, (track) => {
+  if (focusStore.status === 'running') ambient.play(track)
+})
 
 // Color mode: sync cookie → html[class] via direct DOM (client‑only, SSR‑safe)
 // Claude default is light (cream canvas)

@@ -11,7 +11,15 @@
 let audio: HTMLAudioElement | null = null
 let currentUrl: string | null = null
 let fadeTimer: ReturnType<typeof setInterval> | null = null
-let intentionalStop = false // true trong lúc stop() đang fade-out chủ động
+let intentionalStop = false // true trong lúc stop() đang fade-out chủ động, HOẶC bị pause tạm để nhường chỗ cho preview
+
+// Nghe thử 15s: audio RIÊNG với track chính (không đụng fade/loop của phiên Focus).
+// Nếu track chính đang phát, pause tạm (đặt intentionalStop=true để tắt auto-resume ở
+// trên) rồi play() lại sau khi preview kết thúc/bị hủy.
+let previewAudio: HTMLAudioElement | null = null
+let previewTimer: ReturnType<typeof setTimeout> | null = null
+let wasPlayingBeforePreview = false
+const previewingUrl = ref<string | null>(null)
 
 const MASTER = 0.5   // âm lượng nền tối đa
 const STEP = 0.05    // bước fade
@@ -92,5 +100,34 @@ export function useAmbientSound() {
     currentUrl = url
   }
 
-  return { play, stop }
+  // Nghe thử 15s (mặc định). Bấm lại đúng track đang preview -> hủy sớm.
+  function preview(url: string | null | undefined, seconds = 15) {
+    if (import.meta.server || !url) return
+    if (previewingUrl.value === url) { stopPreview(); return }
+    stopPreview()
+    if (audio && !audio.paused) {
+      wasPlayingBeforePreview = true
+      intentionalStop = true // tắt auto-resume trong lúc pause tạm cho preview
+      audio.pause()
+    }
+    const a = new Audio(url)
+    a.volume = MASTER
+    a.play().catch(() => { stopPreview() })
+    previewAudio = a
+    previewingUrl.value = url
+    previewTimer = setTimeout(() => stopPreview(), seconds * 1000)
+  }
+
+  function stopPreview() {
+    if (previewTimer) { clearTimeout(previewTimer); previewTimer = null }
+    if (previewAudio) { try { previewAudio.pause(); previewAudio.src = '' } catch { /* ignore */ } previewAudio = null }
+    previewingUrl.value = null
+    if (wasPlayingBeforePreview && audio) {
+      intentionalStop = false
+      audio.play().catch(() => { /* ignore */ })
+    }
+    wasPlayingBeforePreview = false
+  }
+
+  return { play, stop, preview, stopPreview, previewingUrl }
 }
