@@ -31,7 +31,7 @@
     <section class="max-w-4xl mx-auto px-4 pb-20 md:pb-28">
       <div class="grid gap-4 sm:grid-cols-3 text-center">
         <div class="card">
-          <p class="font-display text-3xl text-ink dark:text-on-dark">25m</p>
+          <p class="font-display text-3xl text-ink dark:text-on-dark">15m, 25m, 45m</p>
           <p class="mt-1 text-xs text-ink-muted dark:text-on-dark-soft">Default Pomodoro session</p>
         </div>
         <div class="card">
@@ -74,7 +74,7 @@
                 </div>
                 <h3 class="font-display text-lg text-ink dark:text-on-dark mb-2">Pomodoro Timer</h3>
                 <p class="text-sm text-ink-body dark:text-on-dark-soft leading-relaxed">
-                  Customizable focus sessions with ambient sounds (Minecraft, rain, cafe). Track every minute and build a consistent deep-work habit.
+                  Customizable focus sessions with ambient sounds. Track every minute and build a consistent deep-work habit.
                 </p>
               </div>
               <!-- Feature 2 -->

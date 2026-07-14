@@ -27,10 +27,10 @@
 
         <!-- Logged-out nav links -->
         <nav v-else class="hidden md:flex items-center h-full gap-1">
-          <a href="/#features" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors">Features</a>
-          <a href="/#how-it-works" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors">How it works</a>
+          <a href="/#" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors">About the Product</a>
+          <!-- <a href="/#how-it-works" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors">How it works</a> -->
           <NuxtLink to="/author" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors" :class="$route.path === '/author' ? 'text-ink dark:text-on-dark' : ''">
-            Author
+            About the Author
           </NuxtLink>
         </nav>
       </div>

@@ -11,9 +11,11 @@
 
         <!-- Landing nav links -->
         <nav class="hidden md:flex items-center h-full gap-1">
-          <a href="/#features" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors rounded-md">Features</a>
-          <a href="/#how-it-works" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors rounded-md">How it works</a>
-          <NuxtLink to="/author" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors rounded-md" :class="$route.path === '/author' ? 'bg-canvas-card text-ink dark:bg-surface-dark-elevated dark:text-on-dark' : ''">Author</NuxtLink>
+          <a href="#" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors rounded-md">About the Product</a>
+          <!-- <a href="/#how-it-works" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors rounded-md">How it works</a> -->
+          <NuxtLink to="/author" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors rounded-md" :class="$route.path === '/author' ? 'bg-canvas-card text-ink dark:bg-surface-dark-elevated dark:text-on-dark' : ''">
+            About the Author
+          </NuxtLink>
         </nav>
       </div>
 

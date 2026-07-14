@@ -1,0 +1,40 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::focus-mode-*/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::focus-mode-*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeAgent"],
+      "Resource": "arn:aws:bedrock:ap-southeast-1:677276113002:agent-alias/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": "arn:aws:secretsmanager:*:*:secret:focus-mode/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel"],
+      "Resource": "arn:aws:bedrock:ap-southeast-1::foundation-model/cohere.embed-multilingual-v3"
+    }
+  ]
+}

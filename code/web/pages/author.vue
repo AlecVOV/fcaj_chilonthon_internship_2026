@@ -22,11 +22,11 @@
             Hi, I'm <span class="text-primary">Chi Lon Thon</span>
           </h1>
           <p class="text-ink-body dark:text-on-dark-soft leading-relaxed text-base max-w-lg">
-            A passionate developer and productivity enthusiast. I built FCAJ Worklog
+            A very silly developer and craving for productivity. I built FCAJ Worklog
             to solve my own problem — staying focused during deep work sessions while
-            keeping a meaningful record of everything I accomplish. This tool is the
-            result of countless late-night coding sessions and a genuine belief that
-            <span class="text-ink dark:text-on-dark font-medium">better tools create better work</span>.
+            keeping a very evidence of record for all the stuff that I have accomplished. This tool is the
+            result of prompting coding deploying and iterating. I hope it can help you too. <br />
+            <span class="text-ink dark:text-on-dark font-medium">Better work starts with better focus, better focus starts with better tools and better tools create better work.</span>
           </p>
         </div>
       </div>
@@ -63,8 +63,8 @@
             <h3 class="font-display text-lg text-on-dark mb-2">AI should assist, not replace</h3>
             <p class="text-sm text-on-dark-soft leading-relaxed">
               I believe AI works best as a <span class="text-on-dark">thinking partner</span>,
-              not a replacement for human judgment. The task agent helps break down
-              complex work but always asks clarifying questions — you stay in control.
+              not a replacement for human judgment. The task agent helps you to understand how vague
+              concepts break down into actionable steps, but always asks clarifying questions — you stay in control.
             </p>
           </div>
 
@@ -85,7 +85,7 @@
             <h3 class="font-display text-lg text-on-dark mb-2">Worklogs should write themselves</h3>
             <p class="text-sm text-on-dark-soft leading-relaxed">
               As an intern, I was tired of manually writing worklog reports. This app
-              <span class="text-on-dark">auto-generates professional PDFs</span> from
+              <span class="text-on-dark">auto-generates markdown documents</span> from
               your actual session data — tasks completed, focus minutes, mood trends.
               No more Sunday-night report panic.
             </p>
