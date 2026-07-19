@@ -1,0 +1,14 @@
+-- ============================================================================
+-- Đã ngừng duy trì file này (2026-07-13).
+--
+-- Trước đây đây là 1 bản schema "gộp" RIÊNG, tách khỏi `supabase/migrations/*.sql`
+-- — đã lệch nhau nặng theo thời gian (bản này vẫn `VECTOR(384)`, chỉ có 7 bảng,
+-- thiếu hẳn `ambient_sounds`, `agent_conversations`, `agent_messages`,
+-- `agent_daily_usage`, `daily_stats` — 5 bảng thêm từ migration 00013/00014/00001).
+--
+-- NGUỒN CHUẨN DUY NHẤT cho DB schema: ../../supabase/migrations/ (00001 → 00016,
+-- chạy tuần tự) + ../../supabase/README.md (tóm tắt bảng + function hiện có).
+--
+-- Giữ file này lại (rỗng, chỉ có comment) thay vì xoá hẳn, để bất kỳ tài liệu/link
+-- cũ nào trỏ tới đây vẫn thấy được lời giải thích thay vì lỗi "not found".
+-- ============================================================================
