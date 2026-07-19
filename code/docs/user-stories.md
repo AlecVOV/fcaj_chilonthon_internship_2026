@@ -60,7 +60,7 @@
 | ID | Priority | Story | Acceptance Criteria | Status |
 |---|---|---|---|---|
 | US-EMO-01 | P0 | As a **user**, I want to **write a journal entry after each session** so that I can reflect on my work. | Text area appears after the timer ends; saved with the focus session straight to Supabase. | ✅ |
-| US-EMO-02 | P1 | As a **user**, I want the **app to auto-detect my emotion** from my journal text so that I don't have to manually rate my mood. | Journal text is sent to the Lambda `/emotion` endpoint when `NUXT_PUBLIC_API_GATEWAY_URL` is configured; **until then a client-side keyword fallback** (`useEmotionDetector.ts`) returns one of focused/stressed/exhausted/relaxed/unmotivated with a confidence %. | ⏳ |
+| US-EMO-02 | P1 | As a **user**, I want the **app to auto-detect my emotion** from my journal text so that I don't have to manually rate my mood. | Journal text is sent to the deployed Lambda `/emotion` endpoint (DistilBERT ONNX in-Lambda) — returns one of focused/stressed/exhausted/relaxed/unmotivated with a confidence %. Client-side keyword fallback (`useEmotionDetector.ts`) only fires if `NUXT_PUBLIC_API_GATEWAY_URL` is unset. | ✅ *(2026-07-13)* |
 | US-EMO-03 | P1 | As a **user**, I want to **see my emotion trend over time** so that I can understand my mental patterns. | *Not built yet* — the dashboard shows only the last-session mood; per-session mood is listed (not charted) on the History/Calendar page. No trend chart. | 🔲 |
 
 ---
@@ -69,9 +69,9 @@
 
 | ID | Priority | Story | Acceptance Criteria | Status |
 |---|---|---|---|---|
-| US-RAG-01 | P2 | As a **user feeling stressed**, I want to **receive calming content** (quotes, sutras) so that I can feel supported. | After emotion is detected, a card shows the top 1–3 matching media items below the journal. Uses the Lambda `/rag` endpoint when configured; **`useRAG.ts` returns a small hardcoded fallback list until the backend is live**. Knowledge base lives in Supabase (`media_library` + pgvector, `search_similar_content()`). | ⏳ |
-| US-RAG-02 | P2 | As a **user**, I want **content recommendations to change based on my emotion** so that the support is relevant. | Exhausted → restorative; Unmotivated → motivational; Relaxed → reflective (server-side matching once `/rag` is deployed). | ⏳ |
-| US-RAG-03 | P2 | As a **user**, I want to **open recommended videos** in a new tab so that I can watch them. | External link with `target="_blank"` for video-type media. | ⏳ |
+| US-RAG-01 | P2 | As a **user feeling stressed**, I want to **receive calming content** (quotes, sutras) so that I can feel supported. | After emotion is detected, a card shows the top matching media items below the journal. Uses the deployed Lambda `/rag` endpoint (Bedrock Cohere Embed Multilingual v3 + `search_similar_content()` RPC); `useRAG.ts` fallback list only fires if the API URL is unset. | ✅ *(2026-07-13)* |
+| US-RAG-02 | P2 | As a **user**, I want **content recommendations to change based on my emotion** so that the support is relevant. | `rag-recommender` maps each of the 5 emotion labels to a distinct query description (`EMOTION_QUERY` in `lambda_function.py`), embeds it, and matches via pgvector cosine similarity — server-side matching is live. | ✅ *(2026-07-13)* |
+| US-RAG-03 | P2 | As a **user**, I want to **open recommended videos** in a new tab so that I can watch them. | **Not built** — verified by reading `pages/focus.vue`: the recommendation card renders `rec.title`/`rec.source`/`rec.type` as plain text only, no `<a>`/`target="_blank"` link to `content_url`. This is a frontend gap now that the backend actually returns `content_url` — genuinely not backend-blocked anymore. | 🔲 |
 
 ---
 
@@ -86,12 +86,16 @@
 
 ## 7. Daily Reports (Markdown / PDF export)
 
-> **Note — LaTeX → Markdown:** the report pipeline was switched from the old LaTeX/Tectonic PDF flow to **Markdown** (`useReportExport.ts`). The `ExportReportButton` downloads an `.md` file client-side today and will POST to the Lambda `/report` endpoint (which can render PDF + email) once that backend is deployed.
+> **Note — LaTeX → Markdown → client-only (2026-07-10):** the report pipeline was switched from
+> LaTeX/Tectonic PDF → Markdown → and finally **`report-generator` Lambda dropped from the plan
+> entirely** (see `docs/PROJECT_STATE.md` mục 23). `ExportReportButton` downloads an `.md` file
+> client-side — this is now the **only** path, not a temporary fallback. US-RPT-01/02 below are a
+> **known, accepted RFP-compliance gap** (the RFP asks for automated nightly email), not pending work.
 
 | ID | Priority | Story | Acceptance Criteria | Status |
 |---|---|---|---|---|
-| US-RPT-01 | P1 | As a **user**, I want to **receive a daily email report** with my focus summary so that I can review my productivity. | Scheduled email with an attached report (task summary, focus time, emotion trend, AI suggestion). Needs the Lambda `/report` + SES/EventBridge backend — **not built yet**. | ⏳ |
-| US-RPT-02 | P1 | As a **user**, I want the **report to look professional** so that I can share it if needed. | Server-rendered PDF with consistent branding and structured sections via Lambda; **client-side fallback downloads a formatted Markdown (`.md`) report today** (`focus-report-<date>.md`). | ⏳ |
+| US-RPT-01 | P1 | As a **user**, I want to **receive a daily email report** with my focus summary so that I can review my productivity. | Scheduled email with an attached report (task summary, focus time, emotion trend, AI suggestion). Needs Lambda `/report` + SES/EventBridge — **actively dropped from scope (2026-07-10), not "not yet built"**. | ❌ Won't build (see note above) |
+| US-RPT-02 | P1 | As a **user**, I want the **report to look professional** so that I can share it if needed. | Server-rendered PDF with consistent branding via Lambda — **dropped along with US-RPT-01**. Client downloads a formatted Markdown (`.md`) report today (`focus-report-<date>.md`) as the permanent solution instead. | ⏳ Partial (Markdown only, by design) |
 | US-RPT-03 | P1 | As a **user**, I want to **view past reports in the web app** so that I can compare my progress. | *Not built yet* — no stored report archive / presigned-URL viewer. (The History/Calendar page shows raw session history instead.) | 🔲 |
 
 ---
@@ -128,7 +132,7 @@
 | US-ADM-01 | P1 | As an **admin**, I want to **view aggregate user statistics** so that I can monitor platform health. | *Partly built* — the Overview page has navigation cards + a **static** System Health card, and per-page counts exist (approved/pending users, total/embedded media); aggregate focus-hours / most-active-users analytics are **not built yet**. | 🔲 |
 | US-ADM-05 | P0 | As an **admin**, I want to **approve or reject pending sign-up requests** so that only vetted people can use the app. | `admin/users.vue` lists users with `status='pending'`; Approve/Reject set `public.users.status` to `approved`/`rejected` (via `useAuth.approveUser`/`rejectUser`), guarded by the `is_admin()` RLS policy. Rejected users appear in a **Rejected** table and can be **re-approved** or **set back to pending** (`useAuth.setUserStatus`). **No** `user_requests` table, `approve-user` edge function, or `profiles` table is used — approval is driven solely by the `users.status` column. | ✅ |
 | US-ADM-06 | P1 | As an **admin**, I want to **promote/demote and delete approved users** so that I can manage roles. | Approved-users table with Promote/Demote (toggles `role`) and Delete actions; admins can't act on their own row. | ✅ |
-| US-ADM-02 | P1 | As an **admin**, I want to **add new content (quotes/sutras/videos) to the media library** so that the RAG system has fresh material. | Form with title, content_text/url, type (quote/sutra/article/video/audio), source, tags; content is saved to Supabase immediately. **Embedding/vectorization** (per-item "Embed" + "Generate All") calls the Lambda `/embed`/`/embed-all` endpoints — **that vectorizer backend is not deployed yet**. | ⏳ |
+| US-ADM-02 | P1 | As an **admin**, I want to **add new content (quotes/sutras/videos) to the media library** so that the RAG system has fresh material. | Form with title, content_text/url, type (quote/sutra/article/video/audio), source, tags; content is saved to Supabase immediately. **Embedding/vectorization** (per-item "Embed" + "Generate All") calls the deployed Lambda `/embed`/`/embed-all` endpoints (`admin-vectorizer`, Bedrock Cohere) — verified working end-to-end, `has_embedding` flips to `Yes` after a real embed. ⚠️ Content over ~2000 chars is embedded on a truncated prefix only (chunking not yet built — see `docs/ai-features-roadmap.md` mục 5). | ✅ *(2026-07-13)* |
 | US-ADM-03 | P1 | As an **admin**, I want to **remove content** so that I can curate the library. | Delete button + confirmation removes the item from Supabase. *Note:* this is a **hard delete** — the `is_active` soft-delete described in the original story is not implemented. | ✅ |
 | US-ADM-04 | P2 | As an **admin**, I want to **view per-user analytics** so that I can understand individual engagement. | *Not built yet* — no per-user drill-down (session history, emotion trends, report history). | 🔲 |
 

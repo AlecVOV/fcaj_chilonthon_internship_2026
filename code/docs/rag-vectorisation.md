@@ -1,263 +1,199 @@
 # RAG Vectorisation — Content Embedding & Retrieval
 
-> Cập nhật 2026-06-29 — đồng bộ với bản cài đặt hiện tại (trạng thái implement đã ghi rõ).
+> Cập nhật 2026-07-13 — đồng bộ với bản cài đặt hiện tại (**ĐÃ DEPLOY & LIVE**, không còn là spec).
 
 > **Project:** Focus Mode App  
-> **Embedding Model:** `all-MiniLM-L6-v2` (Sentence Transformers)  
-> **Vector Dimension:** 384  
+> **Embedding Model:** **Bedrock Cohere Embed Multilingual v3** (`cohere.embed-multilingual-v3`) — qua Bedrock API, KHÔNG đóng gói ML nào vào Lambda  
+> **Vector Dimension:** **1024**  
 > **Vector Store:** Supabase pgvector  
-> **Trigger:** Admin action via CMS → AWS Lambda → pgvector  
+> **2 Lambda:** `admin-vectorizer` (sinh embedding, admin-only) + `rag-recommender` (truy hồi, user thường)  
 
-> **Status (2026-06-29):** Đây là **SPEC**. Hai Lambda liên quan đều mới chỉ có **README** (chưa có `lambda_function.py`): `admin-vectorizer` (sinh embedding) và `rag-recommender` (truy hồi). Layer `sentence-transformers` chỉ là spec; API Gateway có spec nhưng **CHƯA deploy**.
->
-> Đã có sẵn trong DB Supabase (migration `00001_initial_schema.sql`): bảng `public.media_library` với `type` CHECK 5 giá trị (`quote`, `sutra`, `video`, `article`, `audio`), cột `embedding_vector VECTOR(384)`, index `ivfflat` cosine; và hàm `public.search_similar_content(query_embedding, match_threshold, match_count, filter_type)` dùng cho truy hồi.
->
-> Frontend hiện tại (`web/composables/useRAG.ts`): nếu có `NUXT_PUBLIC_API_GATEWAY_URL` thì `POST {API}/rag`; nếu thiếu URL hoặc lỗi thì trả **2 item hardcode** (On Patience – sutra; 5‑Minute Breathing – video). Backend ghi/đọc trực tiếp Supabase (cloud-only).
+> **Status (2026-07-13):** **ĐÃ DEPLOY & LIVE**, đã embed dữ liệu thật qua UI Admin Media, đã test
+> `/rag` trả kết quả thật. Code đầy đủ: `aws/lambdas/admin-vectorizer/lambda_function.py` +
+> `aws/lambdas/rag-recommender/lambda_function.py`. DB: bảng `public.media_library`
+> (`embedding_vector VECTOR(1024)`, đổi từ 384 ở migration `00015`) + hàm
+> `public.search_similar_content()` (migration `00001`, fix bug type mismatch ở `00016`).
+> Frontend: `web/composables/useDataService.ts` (`generateEmbedding`/`generateAllEmbeddings`)
+> và `web/composables/useRAG.ts` đều gửi `Authorization: Bearer <access_token>` thật.
 
 ---
 
-## 1. Why all-MiniLM-L6-v2?
+## 1. Vì sao Cohere Embed Multilingual v3? (không phải MiniLM, không phải Titan)
 
-| Criterion | all-MiniLM-L6-v2 | Alternative (text-embedding-3-small) |
-|---|---|---|
-| **Dimension** | 384 | 1536 |
-| **Model Size** | ~90 MB | ~500 MB |
-| **Speed** | ~1400 sentences/sec | ~900 sentences/sec |
-| **Lambda Memory** | Fits in 512 MB | Needs 1024+ MB |
-| **Quality (MTEB)** | 56.3 | 61.0 |
-| **Cost** | Free (local inference) | OpenAI API ($) |
+Kế hoạch ban đầu (trong `docs/ai-features-roadmap.md` các bản trước) từng cân nhắc 2 phương án
+khác — cả hai đều bị loại bỏ vì lý do cụ thể, verify thật chứ không phải chọn ngẫu nhiên:
 
-✅ **384 dimensions** keeps pgvector indices small (< 1 MB per 1000 entries) and cosine similarity queries fast (< 50ms on Free Tier).
+| Phương án | Vì sao KHÔNG chọn |
+|---|---|
+| `all-MiniLM-L6-v2` (Sentence Transformers, 384-dim, tự host) | Phải đóng gói model + `sentence-transformers` vào Lambda Layer (~200MB) hoặc container image — phức tạp hơn hẳn so với gọi 1 API có sẵn |
+| Bedrock **Titan Text Embeddings v2** (`amazon.titan-embed-text-v2:0`, 1024-dim) | **Không có sẵn ở `ap-southeast-1`** — đã verify thật qua `aws bedrock list-foundation-models --region ap-southeast-1` (chỉ có Claude/Nova/Cohere, không có `amazon.titan-*`). Muốn dùng phải gọi cross-region sang `us-east-1`. |
+| Bedrock **Cohere Embed v4** (`cohere.embed-v4:0`) | Multimodal/multilingual nhưng **yêu cầu Inference Profile** (`get-foundation-model` trả `"inference": ["INFERENCE_PROFILE"]`) — phức tạp hơn, không cần thiết cho use case chỉ embed text |
+| **Bedrock Cohere Embed Multilingual v3** ✅ đã chọn | Có sẵn NGAY tại `ap-southeast-1` (không cross-region), **không cần Inference Profile** (gọi `invoke_model` trực tiếp), 1024 chiều, xử lý tốt cả tiếng Việt (đã test thật với câu tiếng Việt có dấu) |
+
+Kết quả: **Lambda gọi Bedrock CÙNG REGION với chính nó** — không cross-region, không cần IAM
+`GetInferenceProfile` (khác hẳn với Bedrock Agent dùng Claude Haiku 4.5 global profile).
 
 ## 2. Content Types in `media_library`
 
 | Type | Example | Embedding Source |
 |---|---|---|
-| `quote` | "The mind is everything. What you think you become." | Full quote text |
-| `sutra` | Lamrim class transcripts, sutra passages | Full passage text |
-| `video` | YouTube self-help video | Title + description (fetched via YouTube API) |
-| `article` | Blog posts, mindfulness guides | Full article text (first 2000 chars) |
-| `audio` | Meditation audio tracks | Title + description |
+| `quote` | "The mind is everything. What you think you become." | `title` + `content_text` |
+| `sutra` | Lamrim class transcripts, sutra passages | `title` + `content_text` (cắt về **2000 ký tự đầu** — xem cảnh báo §5) |
+| `video` | YouTube self-help video | `title` (+ `content_text` nếu có mô tả) |
+| `article` | Blog posts, mindfulness guides | `title` + `content_text` (cắt 2000 ký tự) |
+| `audio` | Meditation audio tracks | `title` (+ `content_text` nếu có) |
 
-## 3. Vectorisation Flow
+## 3. Vectorisation Flow (thật)
 
 ```
-┌──────────────────┐
-│  Admin CMS        │
-│  (Nuxt 4 / Vue 3) │
-│  /admin/media     │
-│  Admin pastes new  │
-│  quote/sutra text  │
-└────────┬───────────┘
-         │ POST /admin/vectorize
-         ▼
-┌──────────────────────────────────────┐
-│  API Gateway                          │
-│  (Validates JWT → admin role check)  │
-└────────┬─────────────────────────────┘
-         │
-         ▼
-┌──────────────────────────────────────┐
-│  AWS Lambda: focus-admin-vectorize   │
-│                                       │
-│  1. Receive {title, content_text,    │
-│              type, source, tags}      │
-│  2. Load all-MiniLM-L6-v2 (cached)   │
-│  3. model.encode(content_text)        │
-│     → numpy array shape (384,)        │
-│  4. INSERT INTO media_library         │
-│     (title, content_text, type,       │
-│      source, tags,                    │
-│      embedding_vector)                │
-│  5. Return {id, message}              │
-└────────┬─────────────────────────────┘
-         │
-         ▼
-┌──────────────────────────────────────┐
-│  Supabase PostgreSQL + pgvector       │
-│                                       │
-│  INSERT INTO media_library (...)      │
-│  VALUES (..., '[0.023, -0.141, ...]')│
-│                                       │
-│  → ivfflat index auto-updated        │
-└──────────────────────────────────────┘
+Admin (/admin/media) → nút "Embed" / "Generate All Embeddings"
+      │ POST {API}/embed  { mediaId }        (1 item)
+      │ POST {API}/embed-all  {}              (batch — mọi item embedding_vector IS NULL)
+      │ Authorization: Bearer <admin access_token>
+      ▼
+API Gateway (HTTP API ffepnb6gei, KHÔNG JWT authorizer — token ES256)
+      ▼
+Lambda admin-vectorizer
+  1. Xác thực Bearer token in-Lambda: GET {SUPABASE_URL}/rest/v1/users?id=eq.{sub}&select=id,role
+     (PostgREST tự verify chữ ký ES256 + RLS) → role phải 'admin', không thì 401/403
+  2. Đọc media_library qua PostgREST BẰNG CHÍNH TOKEN CỦA ADMIN (KHÔNG dùng service_role)
+     — RLS `media_read_all`/`media_write_admin` là lớp kiểm tra độc lập thứ 2
+  3. Ghép text = title + content_text (cắt 2000 ký tự), gọi Bedrock:
+     invoke_model(modelId='cohere.embed-multilingual-v3',
+                   body={"texts": [...], "input_type": "search_document", "truncate": "END"})
+     /embed-all: TOÀN BỘ text của các item cần embed đi trong 1 LẦN GỌI (Cohere nhận texts
+     là mảng, tới 96 phần tử) — không gọi tuần tự từng item
+  4. PATCH media_library SET embedding_vector = '[0.1,0.2,...]' (pgvector text literal)
+     WHERE id = ... (vẫn dùng token admin, không service_role)
+  5. Trả {mediaId, dimensions: 1024} hoặc {count: N}
 ```
 
-## 4. Embedding Lambda Code (`focus-admin-vectorize`)
+## 4. Lambda Code — tóm tắt thật (không phải spec)
+
+Code đầy đủ: `aws/lambdas/admin-vectorizer/lambda_function.py`. Điểm khác biệt so với thiết kế
+ban đầu (không dùng `sentence-transformers`/`SentenceTransformer`/`service_role` như bản spec cũ):
+
+- **Không có model nào load trong Lambda** — chỉ gọi `boto3.client('bedrock-runtime').invoke_model()`.
+- **Không dùng `SUPABASE_SERVICE_ROLE_KEY`** — chỉ cần `SUPABASE_URL` + `SUPABASE_ANON_KEY`, dùng
+  cùng access_token của admin caller cho mọi thao tác đọc/ghi `media_library`.
+- **`/embed-all` batch thật sự** — 1 lệnh `invoke_model` cho tới 50 item (`MAX_BATCH`), thay vì
+  vòng lặp gọi model từng item một.
+- **Input text bị cắt còn 2000 ký tự** (`MAX_INPUT_CHARS`) trước khi gửi Bedrock — Bedrock Cohere
+  Embed có giới hạn cứng **2048 ký tự/text** (đã verify thật: gửi >2048 ký tự → `ValidationException`
+  ngay, tham số `truncate:"END"` KHÔNG cứu được vì đó là giới hạn request-validation của chính
+  Bedrock, không phải giới hạn token nội bộ của model).
+
+## 5. ⚠️ Giới hạn thật: nội dung dài bị cắt khi embed
+
+Với bài giảng/transcript dài (vd 1 buổi giảng Lamrim ~1 tiếng, nhiều đoạn), **chỉ ~2000 ký tự đầu
+tiên thực sự được embed** — phần còn lại (thường là phần cốt lõi nằm giữa/cuối bài) hoàn toàn
+không ảnh hưởng tới vector, dù `content_text` vẫn lưu đủ trong DB và vẫn hiển thị đủ cho user khi
+RAG match trúng. Đã đo thật trên 1 bài giảng mẫu: chỉ 4/19 đoạn (phần dẫn nhập) lọt vào 2000 ký
+tự — 15 đoạn còn lại (nội dung chính) bị bỏ qua khi tính embedding.
+
+**Đây là hạn chế đã biết, chưa xử lý triệt để** — cách xử lý đúng là **chunking** (chia nội dung
+dài thành nhiều đoạn, mỗi đoạn 1 vector riêng trong bảng `media_chunks`, search theo đoạn rồi trỏ
+về `media_id` gốc). Chi tiết đầy đủ + số liệu đo thật: **`docs/ai-features-roadmap.md` mục 5 (KB
+ingestion pipeline)**.
+
+## 6. Similarity Search — RAG Retrieval (thật)
+
+Khác với thiết kế ban đầu (dùng `journal_text` làm query), **input thật của `rag-recommender` chỉ
+là 1 nhãn emotion đã chuẩn hoá** (`focused/stressed/exhausted/relaxed/unmotivated` — do
+`emotion-detector` trả về trước đó), không phải raw text. Lambda map nhãn → 1 câu mô tả ngắn
+(`EMOTION_QUERY` trong code) rồi embed câu đó:
 
 ```python
-import json
-import os
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from supabase import create_client
-
-# Load model once (global scope for warm starts)
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-model = SentenceTransformer(MODEL_NAME)
-
-supabase = create_client(
-    os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-)
-
-def is_admin(jwt_claims: dict) -> bool:
-    """Check if the caller has admin role."""
-    app_metadata = jwt_claims.get("app_metadata", {})
-    return app_metadata.get("role") == "admin"
-
-def lambda_handler(event, context):
-    # Validate JWT claims (set by API Gateway authorizer)
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    if not is_admin(claims):
-        return {
-            "statusCode": 403,
-            "body": json.dumps({
-                "error": "Forbidden",
-                "message": "Admin role required"
-            })
-        }
-
-    body = json.loads(event.get("body", "{}"))
-    title = body.get("title", "").strip()
-    content_text = body.get("content_text", "").strip()
-    content_type = body.get("type", "quote")
-    source = body.get("source", "")
-    tags = body.get("tags", [])
-    content_url = body.get("content_url")
-
-    if not title or not content_text:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({
-                "error": "BadRequest",
-                "message": "title and content_text are required"
-            })
-        }
-
-    # Generate embedding
-    embedding = model.encode(content_text)
-    # Convert to Python list for JSON/PostgreSQL
-    embedding_list = embedding.tolist()
-
-    # Insert into Supabase
-    result = supabase.table("media_library").insert({
-        "title": title,
-        "content_text": content_text,
-        "content_url": content_url,
-        "type": content_type,
-        "source": source,
-        "tags": tags,
-        "embedding_vector": embedding_list,
-        "created_by": claims.get("sub")  # admin user UUID
-    }).execute()
-
-    new_id = result.data[0]["id"] if result.data else None
-
-    return {
-        "statusCode": 201,
-        "body": json.dumps({
-            "id": new_id,
-            "message": f"Content embedded and stored. Vector dimension: {len(embedding_list)}"
-        })
-    }
+EMOTION_QUERY = {
+    'focused': 'Content to help someone stay deeply focused and maintain productive momentum.',
+    'stressed': 'Calming, soothing content to help relieve stress and anxiety.',
+    'exhausted': 'Gentle, restorative content for someone who is mentally drained and needs to recover energy.',
+    'relaxed': 'Peaceful content that complements a calm, relaxed state of mind.',
+    'unmotivated': 'Inspiring, motivating content to help spark drive and overcome procrastination.',
+}
 ```
 
-## 5. Similarity Search Query (RAG Retrieval)
+**Bất đối xứng có chủ đích**: `admin-vectorizer` embed nội dung lưu trữ với `input_type:
+"search_document"`, còn `rag-recommender` embed câu query với `input_type: "search_query"` —
+đúng khuyến nghị của Cohere để tăng độ chính xác retrieval (2 input_type khác nhau cho 2 vai trò
+khác nhau, dù cùng model/cùng chiều).
 
-When a user completes a focus session with a detected emotion, the RAG Recommender Lambda queries pgvector **qua hàm có sẵn** `public.search_similar_content()` (đã định nghĩa trong migration `00001`) thay vì SQL inline:
+Sau khi có vector câu query, gọi RPC có sẵn (KHÔNG viết SQL inline):
 
 ```sql
--- search_similar_content(query_embedding VECTOR(384), match_threshold REAL DEFAULT 0.3,
+-- search_similar_content(query_embedding VECTOR(1024), match_threshold REAL DEFAULT 0.3,
 --                         match_count INTEGER DEFAULT 5, filter_type TEXT DEFAULT NULL)
 SELECT * FROM public.search_similar_content(
-    query_embedding => :embedding,   -- VECTOR(384) từ all-MiniLM-L6-v2
-    match_threshold => 0.3,          -- tối thiểu 30% match
-    match_count     => 5,
+    query_embedding => :embedding,   -- VECTOR(1024) từ Cohere Embed Multilingual v3
+    match_threshold => 0.3,
+    match_count     => 3,             -- mặc định FE gửi limit=3
     filter_type     => NULL           -- hoặc một trong: quote|sutra|video|article|audio
 );
 ```
 
-Bên trong, hàm thực thi logic cosine tương đương (giữ lại để tham khảo):
+RPC này gọi bằng **chính access_token của user thường** (không cần admin, không dùng
+`service_role`) — hàm Postgres mặc định `SECURITY INVOKER` nên chạy dưới quyền caller, RLS
+`media_read_all` (mọi user đã đăng nhập đọc được) tự áp dụng.
 
-```sql
--- Cosine similarity: 1 - cosine_distance = similarity score (0 to 1)
-SELECT
-    id, title, content_text, content_url, type, source,
-    1 - (embedding_vector <=> query_embedding) AS similarity
-FROM public.media_library
-WHERE is_active = TRUE
-  AND embedding_vector IS NOT NULL
-  AND 1 - (embedding_vector <=> query_embedding) > 0.3   -- minimum 30% match
-ORDER BY embedding_vector <=> query_embedding             -- ascending distance
-LIMIT 5;
-```
+### ⚠️ Bug thật đã gặp + đã fix (migration `00016`)
+
+Lần đầu tiên RPC này được gọi thật trong lịch sử project (2026-07-13, sau khi `rag-recommender`
+deploy), nó lỗi `42804: Returned type double precision does not match expected type real in
+column 7` — bug **có sẵn từ migration `00001_initial_schema.sql`**: cột `similarity` khai `REAL`
+nhưng biểu thức `1 - (embedding <=> query)` (toán tử pgvector) luôn trả `DOUBLE PRECISION`.
+Chưa từng lộ ra vì trước đó chưa Lambda nào gọi RPC này. Fix bằng **migration `00016`** (ép kiểu
+tường minh `::REAL` trong `SELECT`).
 
 ### Query Strategy
 
-| User Emotion | Query Embedding From | Content Type Priority |
+| User Emotion | Query Text (embed với `search_query`) | Content Type Priority |
 |---|---|---|
-| `focused` | session journal_text | `quote`, `video` (motivational) |
-| `stressed` | session journal_text | `sutra`, `audio` (calming) |
-| `exhausted` | session journal_text | `audio`, `quote` (restorative) |
-| `relaxed` | session journal_text | `article`, `quote` (reflective) |
-| `unmotivated` | session journal_text | `video`, `quote` (energizing) |
+| `focused` | "Content to help someone stay deeply focused..." | `quote`, `video` (motivational) |
+| `stressed` | "Calming, soothing content to help relieve stress..." | `sutra`, `audio` (calming) |
+| `exhausted` | "Gentle, restorative content for someone who is mentally drained..." | `audio`, `quote` (restorative) |
+| `relaxed` | "Peaceful content that complements a calm, relaxed state..." | `article`, `quote` (reflective) |
+| `unmotivated` | "Inspiring, motivating content to help spark drive..." | `video`, `quote` (energizing) |
 
-## 6. pgvector Index Configuration
+## 7. pgvector Index Configuration
 
 ```sql
 -- IVF Flat index for approximate nearest neighbor (ANN) search
--- lists = 100 is optimal for < 10,000 rows (Free Tier scale)
+-- lists = 100 là hợp lý cho < 10,000 dòng (quy mô demo)
 CREATE INDEX idx_media_embedding ON media_library
     USING ivfflat (embedding_vector vector_cosine_ops)
     WITH (lists = 100);
-
--- For exact search (small dataset), just use:
--- ORDER BY embedding_vector <=> query_embedding
--- (the <=> operator computes cosine distance)
 ```
 
-## 7. Batch Vectorisation (Admin Bulk Upload)
+Index này được **rebuild** ở migration `00015` khi đổi chiều 384→1024 (index cũ gắn với dimension
+cũ, phải drop + tạo lại, không tự động chuyển đổi).
 
-For bulk importing content (e.g., 100+ Lamrim quotes at once):
+## 8. Batch Vectorisation (Admin Bulk Upload) — thật, đã implement
 
-```python
-def batch_vectorize(contents: list[dict]) -> list[dict]:
-    """Vectorize multiple content items efficiently."""
-    texts = [item["content_text"] for item in contents]
-    embeddings = model.encode(texts, batch_size=32, show_progress_bar=True)
+`/embed-all` gọi Bedrock Cohere **1 LẦN DUY NHẤT** cho tới 50 item cùng lúc (không lặp gọi model
+từng item), rồi lặp ghi từng dòng vào Postgres (bước ghi vẫn phải tuần tự vì PostgREST PATCH là
+theo từng resource). Nếu `media_library` có nhiều hơn 50 item chưa embed, gọi lại `/embed-all`
+nhiều lần cho tới khi `count` trả về `0`.
 
-    results = []
-    for item, emb in zip(contents, embeddings):
-        results.append({
-            **item,
-            "embedding_vector": emb.tolist()
-        })
-
-    # Batch insert (Supabase supports bulk insert)
-    supabase.table("media_library").insert(results).execute()
-    return results
-```
-
-## 8. Content Lifecycle
+## 9. Content Lifecycle
 
 ```
-Admin adds content → vectorized immediately → available in RAG queries
-                                                        │
-                                                        ▼
-                                              Admin can deactivate
-                                              (is_active = false)
-                                                        │
-                                                        ▼
-                                              Excluded from similarity
-                                              search results
+Admin thêm content (createMedia, chưa có embedding_vector)
+      │
+      ▼
+Admin bấm "Embed" hoặc "Generate All Embeddings" → admin-vectorizer → embedding_vector có giá trị
+      │
+      ▼
+Available trong RAG queries (rag-recommender → search_similar_content)
+      │
+      ▼
+Admin có thể set is_active = false → bị loại khỏi kết quả search (không xoá data)
 ```
 
-## 9. Monitoring & Maintenance
+## 10. Monitoring & Maintenance
 
 | Check | Frequency | Method |
 |---|---|---|
-| Embedding dimension | On insert | Assert `len(vector) == 384` |
-| Index performance | Weekly | `EXPLAIN ANALYZE` on similarity query |
+| Embedding dimension | On insert | `EMBED_DIMENSIONS=1024` — assert trong `admin-vectorizer` (`_embed_texts()` raise nếu Cohere trả sai số chiều) |
+| Index performance | Weekly | `EXPLAIN ANALYZE` on `search_similar_content()` |
 | Stale content | Monthly | Query `is_active = false AND updated_at < NOW() - INTERVAL '90 days'` for cleanup |
-| Model drift | Per semester | Re-evaluate retrieval quality with sample queries |
+| Nội dung dài bị cắt embedding | Khi thêm content mới | Xem §5 — cân nhắc rút gọn `content_text` xuống dưới ~2000 ký tự thủ công, hoặc chờ chunking (chưa làm) |

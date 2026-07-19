@@ -14,6 +14,18 @@
 > chấp nhận đánh đổi vì scope dự án nhỏ (`docs/PROJECT_STATE.md` mục 23). 3 diagram Mermaid ở
 > §14 vẫn còn node `report-generator`/`REP`/`L6` — CHƯA gỡ khỏi diagram (rủi ro sửa tay dễ vỡ cú
 > pháp Mermaid mà không render lại để kiểm); coi các node đó là kiến trúc lịch sử/không triển khai.
+>
+> **Update (2026-07-13) — QUAN TRỌNG, đọc trước khi dùng file này:** Tài liệu này là **snapshot kế
+> hoạch lúc 2026-06-29** (mức sẵn sàng ~40% lúc đó). Kể từ đó, **toàn bộ 6/6 lambda AI đã deploy &
+> live**, P0 auth (JWT UUID thay vì token thật) + route mismatch đã vá, Amplify đã deploy production.
+> **KHÔNG dùng §1/§2 dưới đây làm nguồn trạng thái hiện tại** — chỉ giữ làm lịch sử kế hoạch ban
+> đầu, đã đánh dấu tại chỗ những chỗ sai nhiều nhất. **Nguồn chuẩn duy nhất cho trạng thái thật:
+> `docs/PROJECT_STATE.md`** (đặc biệt mục 27-31 cho câu chuyện AI/RAG). Ngoài ra, kiến trúc RAG mô
+> tả ở §1/§9/§14 dùng `search_similar_chunks()` + bảng `media_chunks` + model MiniLM/paraphrase-
+> multilingual — **đây là kế hoạch KHÔNG được build**; kiến trúc thật dùng hàm có sẵn
+> `search_similar_content()` + Bedrock **Cohere Embed Multilingual v3** (1024-dim), không có
+> `media_chunks`, không chunking (xem `docs/ai-features-roadmap.md` mục 5 cho giới hạn thật + kế
+> hoạch chunking tương lai nếu cần).
 
 ---
 
@@ -40,9 +52,12 @@
 
 ## 1. Tóm tắt điều hành
 
+> ⚠️ **Section này là snapshot 2026-06-29 — xem update note đầu file.** Số liệu/kiến trúc dưới đây
+> **KHÔNG còn đúng** — giữ lại làm lịch sử kế hoạch. Trạng thái thật: `docs/PROJECT_STATE.md`.
+
 **Focus Mode App** là ứng dụng quản lý phiên tập trung (Pomodoro/Focus) kèm 5–6 tính năng AI: agent chat tạo/sửa task, nhận diện cảm xúc (emotion), gợi ý nội dung theo cảm xúc (RAG + Knowledge Base), xuất báo cáo (report), và sinh embedding cho thư viện nội dung (embedding/vectorize). Có thêm một tính năng spec-only thứ 6 là *AI Suggestions* (`focus-ai-suggestions`) hiện chỉ là chuỗi tĩnh ở client.
 
-**Kiến trúc mục tiêu:**
+**Kiến trúc mục tiêu (lúc 2026-06-29 — xem "Kiến trúc THẬT đã build" ngay dưới để biết khác gì):**
 
 ```
 [Browser]
@@ -63,49 +78,62 @@
    không qua API Gateway/Lambda/S3/SES/EventBridge nữa. Xem update note đầu file.]
 ```
 
-**Mức độ sẵn sàng tổng thể: ~40%.**
+> **Kiến trúc THẬT đã build (2026-07-13):** khác kiến trúc mục tiêu ở 3 điểm chính — (1) **KHÔNG
+> dùng JWT authorizer** ở API Gateway (token Supabase ES256, authorizer native chỉ RS256) — auth
+> làm TRONG từng Lambda (Bearer → PostgREST verify + RLS); (2) `emotion-detector`/`rag-recommender`/
+> `admin-vectorizer` **đều đã code xong + deploy & live**, không còn "chưa code"; (3)
+> `rag-recommender` gọi `search_similar_content()` có sẵn (KHÔNG phải `search_similar_chunks()` —
+> hàm đó không tồn tại), `admin-vectorizer` gọi Bedrock Cohere Embed Multilingual v3 (KHÔNG phải
+> tự host MiniLM). Chi tiết đầy đủ: `docs/PROJECT_STATE.md` mục 27-31, `docs/rag-vectorisation.md`.
 
-| Khối | Sẵn sàng | Ghi chú |
-|---|---|---|
-| Frontend (app/DB logic) | ~85% | App chạy tốt cloud-only; còn bug auth/route ở lớp gọi AI |
-| Supabase/DB | ~75% | Schema + pgvector OK; thiếu `media_chunks`, có lỗ hổng RLS escalation |
-| AWS AI backend | ~20% | 2/6 lambda có code; còn lại README-only; chưa deploy hạ tầng |
-| Amplify deploy | ~5% | Chưa có `amplify.yml`, chưa có `.gitignore`, build mode sai |
+**Mức độ sẵn sàng tổng thể lúc 2026-06-29: ~40%.** *(Số liệu lịch sử — xem thay thế ngay dưới.)*
 
-**Kết luận:** App SPA sẽ deploy và load được trên Amplify, nhưng **mọi tính năng AI sẽ fail (401 / 404 / fallback im lặng)** cho tới khi sửa auth + route và build 4 lambda còn thiếu.
+| Khối | Sẵn sàng (2026-06-29) | Sẵn sàng THẬT (2026-07-13) | Ghi chú |
+|---|---|---|---|
+| Frontend (app/DB logic) | ~85% | **~98%** | Auth/route AI đã vá hết; còn thiếu US-RAG-03 (link video chưa click được — `docs/user-stories.md`) |
+| Supabase/DB | ~75% | **~95%** | Schema + pgvector OK, đã đổi 1024-dim; lỗ hổng RLS escalation đã vá (`00009`); vẫn thiếu `media_chunks` (chunking — optional, xem `docs/ai-features-roadmap.md` mục 5) |
+| AWS AI backend | ~20% | **~95%** | **6/6 lambda deploy & live**; còn thiếu CI/CD/IaC (chấp nhận được ở quy mô demo) |
+| Amplify deploy | ~5% | **100%** | Đã deploy production, domain live |
+
+**Kết luận (2026-07-13):** App + toàn bộ 6 tính năng AI đều chạy được thật trên production. Gap
+còn lại thực chất: test coverage ~0% (quyết định có chủ đích, để cuối), `report-generator` là gap
+RFP đã chấp nhận (§ update note đầu file), và content dài bị cắt khi embed (chunking chưa làm).
 
 ---
 
 ## 2. Hiện trạng theo tầng
 
+> ⚠️ **Bảng này là snapshot 2026-06-29 — hầu hết ❌/⚠️ dưới đây đã thành ✅ thật.** Đã đánh dấu
+> tại chỗ những dòng lệch nhiều nhất; xem `docs/PROJECT_STATE.md` cho trạng thái đầy đủ chính xác.
+
 Chú thích: ✅ sẵn sàng · ⚠️ có nhưng lệch/thiếu · ❌ chưa có / hỏng.
 
-| Tầng / Thành phần | Trạng thái | Ghi chú (file:line) |
+| Tầng / Thành phần | Trạng thái (2026-06-29) | Ghi chú (file:line) |
 |---|---|---|
 | **Frontend — app & DB logic** | ✅ | Nuxt 3 (`package.json` nuxt ^3.15, dù gọi là "Nuxt 4"), cloud-only Supabase. Tasks/Focus/Calendar/Admin hoạt động. |
-| **Frontend — build mode** | ⚠️ | Script mặc định `nuxt build` → `.output/server` (preset node-server), KHÔNG static. Phải dùng `nuxt generate`. (`web/package.json:8-9`; `.output/nitro.json`) |
-| **Frontend — gọi AI (auth)** | ❌ | `useAgentChat` gửi `Bearer ${currentUser.id}` (UUID, không phải JWT) (`useAgentChat.ts:74`); 4 composable AI khác KHÔNG gửi header auth nào. |
-| **Frontend — gọi AI (route)** | ❌ | FE gọi `/emotion`, `/rag`, `/embed`, `/embed-all` ≠ openapi `/emotion/detect`, `/rag/recommend`, `/admin/vectorize`; `/embed*` không tồn tại server-side. |
+| **Frontend — build mode** | ⚠️ | Script mặc định `nuxt build` → `.output/server` (preset node-server), KHÔNG static. Phải dùng `nuxt generate`. (`web/package.json:8-9`; `.output/nitro.json`) — ✅ **đã dùng đúng, Amplify build live** |
+| **Frontend — gọi AI (auth)** | ❌→**✅ (2026-07-13)** | Đã vá hết: `useAgentChat`/`useEmotionDetector`/`useRAG`/`useDataService` đều gửi `Bearer <session.access_token>` thật (không còn UUID/thiếu header). |
+| **Frontend — gọi AI (route)** | ❌→**✅ (2026-07-13)** | `openapi.yaml` đã đổi khớp đúng route FE gọi thật (`/emotion`, `/rag`, `/embed`, `/embed-all`) — không còn lệch. |
 | **Frontend — admin identity** | ✅ | Đã BỎ hẳn `ADMIN_EMAILS`/`adminEmails` khỏi env + code; admin xác định DUY NHẤT bằng `public.users.role='admin'` (khớp RLS `is_admin()`). |
-| **Supabase — schema** | ✅ | `users/tasks/focus_sessions/daily_worklogs/daily_stats/media_library/sync_log`; ext uuid-ossp, pgcrypto, vector. |
-| **Supabase — pgvector RAG** | ⚠️ | `media_library.embedding_vector VECTOR(384)` + index ivfflat cosine + `search_similar_content()` (`00001:121-228`). Thiếu bảng `media_chunks`; model `all-MiniLM-L6-v2` yếu tiếng Việt. |
-| **Supabase — RLS** | ❌ | Lỗ hổng: policy "Users update own profile" KHÔNG có `WITH CHECK` ⇒ user tự `UPDATE role='admin', status='approved'` để leo quyền (`00006:99-100`). `daily_worklogs/daily_stats` INSERT `WITH CHECK (TRUE)` cho mọi role (`00001:281-288`). Policy admin định nghĩa trùng/mâu thuẫn (`00001:291-300` email-LIKE vs `rls_policies.sql:29-34` role). |
-| **Lambda `agent-bff`** | ⚠️ | CÓ code (`lambda_function.py:1-41`). Đọc `claims.sub` (REST v1 shape) — cần verify theo loại API Gateway. Không error-handling, chỉ trả `{sessionId,responseText}` (thiếu tasks/followUpQuestions FE đang đọc). CORS chỉ trên path 200. |
-| **Lambda `agent-action-handler`** | ✅ | CÓ code (`lambda_function.py:1-67`). Route `/create-task`,`/update-task`,`/delete-task` theo apiPath+method; khớp action-group openapi. `create` tin `user_id` truyền vào. |
-| **Lambda `emotion-detector`** | ❌ | CHỈ README. Cần distilbert ONNX INT8 + layer onnx-transformers. |
-| **Lambda `rag-recommender`** | ❌ | CHỈ README. pgvector cosine; chưa định nghĩa nguồn query vector. |
-| **Lambda `admin-vectorizer` (embed)** | ❌ | CHỈ README. all-MiniLM-L6-v2 384d + layer sentence-transformers. |
+| **Supabase — schema** | ✅ | `users/tasks/focus_sessions/daily_worklogs/daily_stats/media_library/sync_log`; ext uuid-ossp, pgcrypto, vector. Đã thêm `ambient_sounds`/`agent_conversations`/`agent_messages`/`agent_daily_usage` (migration `00013`-`00014`). |
+| **Supabase — pgvector RAG** | ⚠️→**✅ (2026-07-13)** | `media_library.embedding_vector` đổi **`VECTOR(1024)`** (migration `00015`, Bedrock Cohere Embed Multilingual v3 — KHÔNG phải MiniLM 384 nữa) + `search_similar_content()` fix bug type mismatch (`00016`). Vẫn thiếu `media_chunks` (chunking, optional). |
+| **Supabase — RLS** | ❌→**✅ (đã vá ở migration `00009`)** | Lỗ hổng leo quyền đã chặn bằng BEFORE UPDATE trigger `guard_user_self_update()`. |
+| **Lambda `agent-bff`** | ⚠️→**✅ deploy & live** | Đã sửa auth in-Lambda (Supabase-validate ES256), sessionId namespace, cap input, CORS đầy đủ. |
+| **Lambda `agent-action-handler`** | ✅ deploy & live | Không đổi nhiều — vẫn đúng như mô tả gốc + đã thêm `/list-tasks` (mục 20, `docs/PROJECT_STATE.md`). |
+| **Lambda `emotion-detector`** | ❌→**✅ deploy & live (2026-07-12)** | DistilBERT ONNX INT8, đóng gói thẳng trong Lambda (không layer). |
+| **Lambda `rag-recommender`** | ❌→**✅ deploy & live (2026-07-13)** | Gọi `search_similar_content()` có sẵn (KHÔNG phải `search_similar_chunks` — hàm đó chưa từng tồn tại), query vector từ Bedrock Cohere Embed theo emotion label. |
+| **Lambda `admin-vectorizer` (embed)** | ❌→**✅ deploy & live (2026-07-13)** | Bedrock Cohere Embed Multilingual v3 (1024d) qua API — KHÔNG tự host MiniLM, không cần layer. |
 | **Lambda `report-generator`** | 🚫 | **Đã bỏ khỏi kế hoạch (2026-07-10)** — folder đã xóa, không làm nữa. Xem update note đầu file. |
-| **Lambda `focus-ai-suggestions`** | ❌ | Spec-only, không có thư mục/code; "AI Suggestions" trong report là chuỗi tĩnh client. |
-| **API Gateway** | ⚠️ | `openapi.yaml` định nghĩa 5 route + JWT authorizer (issuer Supabase `/auth/v1`, audience `authenticated`) nhưng CHƯA deploy. Không có OPTIONS/CORS. Loại API (REST v1 vs HTTP v2) chưa pin ⇒ chưa xác định được `claims.sub` hay `jwt.claims.sub`. |
-| **Bedrock** | ⚠️ | Agent + Action Group + alias chỉ documented (`aws/bedrock/README.md`), chưa tạo. Chưa có bước request model access theo region. |
-| **IAM** | ⚠️ | Role có logs/s3(focus-mode-*)/ses/bedrock:InvokeAgent/secretsmanager. THIẾU `bedrock:InvokeModel`, `bedrock:Retrieve*`; `lambda:InvokeFunction` scope `focus-*` KHÔNG khớp tên `agent-bff`/`agent-action-handler`. SES & secretsmanager cấp nhưng chưa dùng. |
-| **Layers** | ❌ | Chỉ spec. sentence-transformers (~200MB) + torch dễ vượt giới hạn 250MB unzip. Không có bước ship model weights lên `/opt/model`. |
-| **S3 / SES** | ❌ | Chưa tạo bucket (`focus-mode-reports`?), chưa quyết public vs presigned URL. SES còn sandbox, sender chưa verify. **Lưu ý KB:** RAG dùng pgvector trong Supabase, KHÔNG cần S3; S3 chỉ phục vụ report/audio. |
-| **EventBridge** | ❌ | cron `59 16 * * ? *` chỉ ghi trong README; chưa có rule/target/permission. |
-| **Secrets Manager** | ❌ | IAM cấp `GetSecretValue` nhưng lambda đọc `os.environ` (service_role plaintext). |
-| **CloudWatch / Observability** | ❌ | Không có alarm, log retention, X-Ray, DLQ, access log. |
-| **CI/CD** | ❌ | Không có. File `docs/cicd-cloudflare-pages.yml` là GitLab CI cho Cloudflare/Netlify (sai platform), dùng pnpm/dist/, tham chiếu dir & SAM template không tồn tại ⇒ không dùng được. Chỉ có `deploy.sh` lẻ cho 2 lambda. |
+| **Lambda `focus-ai-suggestions`** | ❌ | Vẫn spec-only, không có thư mục/code; "AI Suggestions" đã bị bỏ khỏi report luôn (không còn chuỗi tĩnh). |
+| **API Gateway** | ⚠️→**✅ deploy & live, nhưng auth khác thiết kế** | **KHÔNG dùng JWT authorizer** (quyết định cuối — token ES256, authorizer native chỉ RS256) — auth làm TRONG từng Lambda. 7/7 route thật đã deploy trên HTTP API `ffepnb6gei`. |
+| **Bedrock** | ⚠️→**✅ deploy & live** | Agent `task-manager-agent` (`KKJCF9RAKJ`) + Guardrail + action group đã tạo thật, model Claude Haiku 4.5 global. Cohere Embed Multilingual v3 dùng cho RAG/vectorizer (không phải Titan — không có ở `ap-southeast-1`). |
+| **IAM** | ⚠️→**✅ cập nhật** | Role `focus-ai-lambda-role` đã thêm `bedrock:InvokeModel` (scope Cohere Embed) — xem `aws/iam/README.md`. SES/secretsmanager vẫn cấp nhưng không dùng thật (legacy từ report-generator, vô hại). |
+| **Layers** | ❌→**✅ quyết định KHÔNG dùng** | Không phải "chưa làm" — quyết định cuối cùng là bundle deps trực tiếp (`emotion-detector`) hoặc gọi Bedrock API (`admin-vectorizer`/`rag-recommender`), tránh hẳn giới hạn 250MB layer. Xem `aws/layers/README.md`. |
+| **S3 / SES** | ❌ | S3 **có dùng thật** nhưng cho **ambient audio** (`focus-mode-ambient-audio` bucket, đã deploy), KHÔNG phải report (report đã bỏ, không cần S3/SES nữa). |
+| **EventBridge** | ❌ | Không cần nữa — nightly report cron đã bỏ khỏi kế hoạch cùng `report-generator`. |
+| **Secrets Manager** | ❌ | Vẫn KHÔNG dùng — quyết định có chủ đích (`docs/PROJECT_STATE.md` mục 23), service_role vẫn plaintext env, chấp nhận được ở quy mô demo. |
+| **CloudWatch / Observability** | ❌ | Vẫn không có alarm/X-Ray/DLQ chính thức — nhưng **CloudWatch Logs đã dùng thật** để debug mọi lambda lúc deploy (xem `docs/PROJECT_STATE.md` mục 29-31, nhiều lần tra log thật để chẩn đoán bug). |
+| **CI/CD** | ❌ | Vẫn không có — deploy thủ công qua `DEPLOY-cmd.md` từng lambda (không phải `deploy.sh` nữa). Chấp nhận được ở quy mô demo/bootcamp. |
 
 ---
 

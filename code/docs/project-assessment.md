@@ -4,6 +4,14 @@
 >
 > **Update (2026-07-06):** (1) Pipeline report đã **bỏ LaTeX/Tectonic** — nay render **Markdown (UTF‑8)** trong `web/composables/useReportExport.ts`, nên mọi nhận định về LaTeX / XeLaTeX / `sanitizeForLatex` bên dưới đã **lỗi thời** và được đánh dấu tại chỗ. (2) Đã **gỡ env `ADMIN_EMAILS`** — admin chỉ còn xác định bằng `public.users.role='admin'` (khớp RLS `is_admin()`). (3) Migrations đã có tới **`00009`** (hardening DB: trigger chặn leo quyền, FK `users→auth.users`, drop `sync_log`, index `users.status`) — vẫn **cần chạy `00009`** trong Supabase SQL Editor. (4) Đợt rà local + DB (2026-07-05) landing thêm nhiều fix (xem §2.8). (5) Còn mở: AWS AI (4/6 lambda chưa code) + Amplify chưa deploy; P0 auth JWT + route mismatch; Supabase "Confirm email" phải **TẮT**.
 >
+> **Update (2026-07-13):** Toàn bộ mục (5) ở trên đã đóng — **6/6 lambda AI đã deploy & live**
+> (`agent-bff`, `agent-action-handler`, `ambient-audio-manager`, `emotion-detector`,
+> `admin-vectorizer`, `rag-recommender`), Amplify đã live (production domain), P0 auth JWT +
+> route mismatch đã vá. `rag-recommender`/`admin-vectorizer` dùng Bedrock **Cohere Embed
+> Multilingual v3** (1024-dim) — không phải all-MiniLM-L6-v2 384-dim như spec ban đầu ở §2.3/§3.1
+> dưới đây (giữ nguyên đoạn cũ làm lịch sử thiết kế, đánh dấu tại chỗ). Điểm tổng ở §5 đã cập
+> nhật theo trạng thái mới. Xem `docs/PROJECT_STATE.md` mục 29-31 cho câu chuyện deploy đầy đủ.
+>
 > **Update (2026-07-10) — QUYẾT ĐỊNH SCOPE, ảnh hưởng RFP compliance:** `report-generator` Lambda **đã bị bỏ khỏi kế hoạch hoàn toàn** (folder `aws/lambdas/report-generator/` đã xóa, route `/report` đã gỡ khỏi `api-gateway/openapi.yaml`). Export report giờ **thuần client-side** — `useReportExport.ts` render Markdown + tải file ngay trên trình duyệt, theo yêu cầu của user, mỗi ngày trong Worklog History. **Lưu ý quan trọng:** RFP (`docs/Internship Documentation.md` dòng 134-136, 162, 486, 558, 576) yêu cầu cụ thể **tự động gửi EMAIL báo cáo mỗi đêm 23:59 qua EventBridge + Lambda + SES** — client-side download **KHÔNG thỏa mãn** phần "tự động" + "email" của yêu cầu này (user phải tự vào app bấm tải, không có gì chạy nền/gửi mail). Đây là đánh đổi có chủ đích (scope dự án nhỏ, xem `docs/PROJECT_STATE.md` mục 23) — nhưng nếu phần trình bày/nộp bài đánh giá theo đúng RFP gốc thì mục "báo cáo tự động qua email" sẽ được xem là **chưa làm**, không phải "đã làm bằng cách khác". Mọi dòng bên dưới nhắc "Critical — 40% of evaluation" / "explicitly promised in RFP" cho `report-generator` phản ánh đúng thực tế này, KHÔNG lỗi thời — chỉ có phần "chưa implement Lambda" nay đổi thành "chủ động không làm Lambda" mà thôi.
 
 **Date:** May 22, 2026  
@@ -46,7 +54,7 @@ The target user is a single-user productivity scenario — a student or professi
 
 ### 2.1 Architecture Excellence — Event-Driven, Cloud-Native, Serverless
 
-The system avoids monolithic design entirely. It combines **Supabase Cloud BaaS** (auth, database, vector store), **AWS Lambda** (emotion detection, report generation, AI suggestions, admin vectorization), **EventBridge** (nightly cron for report generation), **API Gateway** (secure routing), and **S3/SES** (storage/email). This is genuinely production-grade thinking — each component has a single responsibility, scales independently, and stays within free-tier limits.
+The system avoids monolithic design entirely. It combines **Supabase Cloud BaaS** (auth, database, vector store), **AWS Lambda** (agent chat + task actions, ambient audio, emotion detection, RAG recommendation, media embedding — all 6 deployed & live as of 2026-07-13), **Amazon Bedrock** (Claude Haiku 4.5 agent + Cohere Embed Multilingual v3), and **API Gateway** (secure routing). ~~**EventBridge** (nightly cron for report generation), and **S3/SES** (storage/email)~~ — dropped along with `report-generator` (2026-07-10); S3 is still used, just for ambient audio files, not report email. This is genuinely production-grade thinking — each component has a single responsibility, scales independently, and stays within free-tier limits.
 
 ### 2.2 Cloud-Only Data Layer (offline-first REMOVED)
 
@@ -54,7 +62,14 @@ The system avoids monolithic design entirely. It combines **Supabase Cloud BaaS*
 
 ~~The Dexie.js (IndexedDB) layer with a sync queue is properly architected. All writes go local-first, then queue to Supabase when online. The Last-Write-Wins (LWW) conflict resolution based on `updated_at` is simple but appropriate for a single-user productivity app.~~ The `SyncStatus` component now provides simple connectivity feedback only.
 
-### 2.3 AI Integration (partially implemented)
+### 2.3 AI Integration — now fully implemented and deployed
+
+> **Update (2026-07-13):** All 6 Lambdas now have real code and are **deployed & live**. Emotion
+> detection runs DistilBERT ONNX packaged directly in the Lambda (not Bedrock). RAG/embedding
+> switched from the originally-designed `all-MiniLM-L6-v2` (384-dim, self-hosted) to **Bedrock
+> Cohere Embed Multilingual v3** (1024-dim, API-based) — Titan Embed v2 was considered first but
+> isn't available in `ap-southeast-1`; Cohere is, with no cross-region call and no inference
+> profile needed. The paragraph below is kept as the **original design record**, not current fact.
 
 > **Update (2026-06-29):** The ML models below are still the design intent, but most of the serverless AI is **not yet running**. Only `agent-bff` and `agent-action-handler` have real Python code; `emotion-detector`, `rag-recommender`, `admin-vectorizer`, and `report-generator` are README/spec only. The model layers (`onnx-transformers`, `sentence-transformers`) are spec only, and API Gateway/Bedrock are not deployed. When no `NUXT_PUBLIC_API_GATEWAY_URL` is configured the agent chat errors out (no mock), while emotion detection falls back to a client-side regex and RAG falls back to hardcoded suggestions.
 
@@ -105,7 +120,16 @@ Every service choice is justified against free-tier limits:
 
 ## 3. Weaknesses / Risks (Cons)
 
-### 3.1 Missing Lambda Implementations
+### 3.1 Missing Lambda Implementations — RESOLVED (2026-07-13)
+
+> **Update (2026-07-13):** This section is now **historical**. All remaining Lambdas
+> (`emotion-detector`, `admin-vectorizer`, `rag-recommender`) have real code and are deployed &
+> live, alongside `agent-bff`/`agent-action-handler`/`ambient-audio-manager`. Model layers
+> (`onnx-transformers`, `sentence-transformers`) were a dead end — the final implementation uses
+> neither (DistilBERT bundled directly in `emotion-detector`; `admin-vectorizer`/`rag-recommender`
+> call Bedrock, no layer needed). API Gateway + Bedrock are deployed. CI/CD/IaC is still absent
+> (deploy is manual AWS CLI per `DEPLOY-cmd.md`, not a real gap for a bootcamp-scale demo). The
+> paragraph below is kept as the original weakness record.
 
 > **Update (2026-06-29):** Of the six Lambdas, two now have real code (`agent-bff`, `agent-action-handler`). The following four remain **documented but not yet implemented** (README only):
 
@@ -224,9 +248,34 @@ Playwright E2E tests are marked "optional for MVP" in the testing plan. For a Hi
 
 ## 5. Overall Assessment
 
-### Readiness for High Distinction: **7.5 / 10**
+> **Update (2026-07-13):** Score revised from the original **7.5/10** below — the single biggest
+> weakness cited at the time (3 of 6 Lambdas not implemented) is now closed. Original text kept
+> below for history.
 
-**Justification:**
+### Readiness for High Distinction: **8.5 / 10**
+
+**Justification (2026-07-13):**
+- **Cloud-native** — Supabase BaaS, all reads/writes cloud-only (unchanged from original assessment)
+- **AI/ML integration complete** — all 6 Lambdas deployed & live: Bedrock Task Agent (Claude Haiku 4.5), DistilBERT ONNX emotion detection (in-Lambda), Bedrock Cohere Embed Multilingual v3 for RAG/vectorization, S3-backed ambient audio manager
+- **Real, verified deploys** — every Lambda tested end-to-end via `curl` + CloudWatch (not just "should work"); 3 genuine bugs found and fixed during deploy are documented (`docs/PROJECT_STATE.md` mục 29-31), including a latent Postgres type-mismatch bug in `search_similar_content()` that predates this work
+- **Professional documentation** — schema, API contracts, NLP/RAG specs, testing plan, plus honest "known limitation" notes (e.g. embedding truncation at 2000 chars, approximate 6→5 emotion label mapping)
+- **Production live** — Amplify deployment is up on a real domain, not just local dev
+
+**What's still holding it back from 9-10:**
+- **Test coverage is ~0%** — deliberate scope decision (deprioritized to the very end per project owner), not an oversight, but still a real gap for a "10/10" bar
+- **No CI/CD/IaC** — deploy is manual AWS CLI per `DEPLOY-cmd.md`, acceptable for a bootcamp demo but not production-grade
+- **`report-generator` is an accepted RFP-compliance gap** — the RFP explicitly asks for automated nightly email reports; this was deliberately dropped in favor of client-side Markdown export (see top-of-file note) — a real, disclosed deviation, not a bug
+- **Content ingestion is manual + truncated** — media library content is admin-typed (no crawl pipeline), and any single item over ~2000 characters is embedded on a truncated prefix only (chunking not yet implemented — see `docs/ai-features-roadmap.md` mục 5)
+
+**To reach 9/10:** Add real Lambda + frontend tests (even partial coverage on the riskiest paths — agent action handler, RLS-gated writes), and implement content chunking so long lecture transcripts embed fully instead of just their first ~2000 characters.
+
+**To reach 10/10:** 70%+ test coverage with E2E tests, CI/CD pipeline for the Lambda deploys, and either close or formally accept-and-document the `report-generator` RFP gap as a submission note.
+
+---
+
+### Original assessment (2026-06-29 – 2026-07-06, kept for history)
+
+**Readiness for High Distinction at the time: 7.5 / 10**
 
 The project demonstrates exceptional technical breadth and depth:
 - **Cloud-native** — managed BaaS (Supabase) with all reads/writes going directly to the cloud (offline-first client has been removed; see §2.2)
@@ -234,15 +283,11 @@ The project demonstrates exceptional technical breadth and depth:
 - **Professional documentation** — schema, API contracts, NLP/RAG specs, testing plan
 - **Thoughtful tradeoffs** — model size vs Lambda memory; Markdown reports (no LaTeX toolchain) for native UTF‑8/Vietnamese
 
-**What's holding it back from a 9 or 10:**
+**What was holding it back from a 9 or 10:**
 - **3 of 5 remaining Lambda functions are not implemented** — `emotion-detector`, `admin-vectorizer`, and `rag-recommender` are README/spec only; `agent-bff`, `agent-action-handler`, and `ambient-audio-manager` have code and are deployed. `report-generator` is not "not yet implemented" — **[Update 2026-07-10] it was actively removed from the plan.** The report generator (automated nightly email) is explicitly promised in the RFP; this is now a known, accepted RFP-compliance gap rather than a pending task — see top-of-file note.
 - **Testing is planned but minimal** — the 70% coverage target won't be met without actual Lambda tests
 - **Deploy blockers still open** — `00009` not yet run; P0 auth (frontend sends the user UUID instead of a Supabase JWT) and the FE↔OpenAPI route mismatch are unresolved; Amplify build config (`nuxt generate` + `amplify.yml`) is not in place
 - **Pinia import reliability** — the pattern of stores using `ref`/`computed` without explicit imports is fragile and has caused real compilation errors
-
-**To reach 9/10:** Implement the report generator Lambda end-to-end (Markdown report → S3 → SES email), add Lambda handler tests, and close the P0 deploy blockers (run `00009`, JWT auth, route mismatch).
-
-**To reach 10/10:** Complete all Lambda functions, deploy API Gateway + Bedrock and add CI/CD, achieve 70%+ test coverage with E2E tests, implement the RAG recommender with real pgvector queries, and deploy to a live domain.
 
 ---
 
@@ -252,8 +297,8 @@ The project demonstrates exceptional technical breadth and depth:
 
 - [ ] **Fix Pinia imports** — Add `import { ref, computed } from 'vue'` to `user.store.ts`, `task.store.ts`, `focus.store.ts`
 - [ ] ~~**Implement report-generator Lambda**~~ — **[Update 2026-07-10] decided against, won't be built.** Frontend now *always* does a client-side `.md` download (not a "fallback" anymore — the only path). This checklist item is closed as "won't do," not "todo." See top-of-file note re: RFP compliance.
-- [ ] **Add API Gateway route** — `POST /report` → Lambda with JWT authorizer (also resolve the FE `/report` ↔ OpenAPI route naming)
-- [ ] **Test export flow end-to-end** — Dashboard → "Export Report" → Lambda → S3 → SES → email received
+- [x] ~~**Add API Gateway route** — `POST /report` → Lambda with JWT authorizer~~ — **moot, `report-generator` dropped (2026-07-10)**; also JWT authorizer was never viable (token ES256)
+- [x] ~~**Test export flow end-to-end** — Dashboard → "Export Report" → Lambda → S3 → SES → email received~~ — **moot, export is client-side `.md` download only, no Lambda in the path**
 
 ### Short-Term (Before Final Demo)
 
@@ -266,7 +311,7 @@ The project demonstrates exceptional technical breadth and depth:
 ### Before Submission
 
 - [ ] **Achieve 70% test coverage** — verify with `vitest --coverage` and `pytest --cov`
-- [ ] **Deploy to AWS Amplify** — add `amplify.yml` + `nuxt generate` (static SPA), configure `NUXT_PUBLIC_*` env vars, verify live URL (target platform is now Amplify, not Cloudflare Pages)
+- [x] **Deploy to AWS Amplify** — done, production domain live, `NUXT_PUBLIC_*` env vars configured
 - [ ] **Update documentation** — any architectural changes since `docs/` was generated
 - [ ] **Prepare pitch deck** — architecture diagram, demo flow, technical highlights
 - [ ] **Final code review** — remove console.log, unused imports, dead code

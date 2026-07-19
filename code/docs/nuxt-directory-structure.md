@@ -169,7 +169,8 @@ export default defineNuxtConfig({
 - Toàn bộ dữ liệu (users, tasks, focus_sessions, daily_worklogs, daily_stats, media_library...)
   nằm trên **Supabase Postgres**; client đọc/ghi trực tiếp qua `lib/supabaseClient.ts`.
 - Bảo mật bằng **Row Level Security (RLS)**; quyền admin xác định qua hàm `is_admin()`.
-- Tìm kiếm ngữ nghĩa (RAG) dùng **pgvector** với `search_similar_content()` (embedding 384 chiều).
+- Tìm kiếm ngữ nghĩa (RAG) dùng **pgvector** với `search_similar_content()` (embedding **1024**
+  chiều — Bedrock Cohere Embed Multilingual v3, đổi từ 384/MiniLM ban đầu ở migration `00015`).
 - KHÔNG có IndexedDB / Dexie / sync queue / Last-Write-Wins / mock backend — các thành phần
   này đã bị gỡ khỏi codebase (ví dụ `web/lib/db.ts`, `web/composables/useSyncQueue.ts`).
 

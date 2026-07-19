@@ -46,6 +46,13 @@
         "secretsmanager:GetSecretValue"
       ],
       "Resource": "arn:aws:secretsmanager:*:*:secret:focus-mode/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel"
+      ],
+      "Resource": "arn:aws:bedrock:ap-southeast-1::foundation-model/cohere.embed-multilingual-v3"
     }
   ]
 }

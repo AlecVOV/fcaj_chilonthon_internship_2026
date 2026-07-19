@@ -1,6 +1,6 @@
 # State Management — Pinia Stores (Nuxt 4 / Vue 3)
 
-> Cập nhật 2026-07-06 — đồng bộ với bản cài đặt cloud-only hiện tại (kèm đợt rà local+DB 2026-07-05: persist phiên focus qua reload, `saveSession` ném lỗi, khóa xóa task khi focus, banner lỗi tải task, ambient WebAudio).
+> Cập nhật 2026-07-13 — §3.3 Ambient audio viết lại đúng kiến trúc thật (file MP3 + watcher ở `app.vue` + preview 15s), thay bản cũ nói "WebAudio synth" đã lỗi thời.
 
 > **Project:** Focus Mode App (Web-Only)  
 > **Framework:** Nuxt 4 + Vue 3  
@@ -339,7 +339,17 @@ Component dùng chung `components/TaskReviewDialog.vue` được đặt trong `l
 - **Snapshot `taskTitle`** được lưu lúc start để hiển thị bền vững dù task bị hoàn thành/xóa.
 - **Persist/restore phiên qua reload**: mọi thay đổi `status` được ghi vào `localStorage` (key `focus_session`) qua `watch`; lúc khởi tạo store gọi `restore()` để dựng lại phiên đang chạy/tạm dừng/đã xong sau F5 hoặc tab bị discard (running thì tính lại từ `endAt`; nếu đã hết giờ trong lúc đóng tab thì nhảy thẳng màn hoàn thành, bỏ chuông trễ).
 - **Lưu phiên** qua `useDataService().createSession()` (→ Supabase `focus_sessions`). `saveSession()` **để lỗi NÉM ra** (không nuốt) để caller giữ màn completion — không mất journal/emotion khi save lỗi.
-- **Ambient audio** KHÔNG nằm trong store: composable `composables/useAmbientSound.ts` (WebAudio, tổng hợp noise theo track `rain`/`cafe`/`waves`, không cần asset) được `pages/focus.vue` gọi để play/stop; store chỉ giữ tên track (`ambientTrack`) để lưu vào phiên.
+- **Ambient audio** KHÔNG nằm trong store: composable `composables/useAmbientSound.ts` phát file
+  MP3 thật (host S3, chọn từ bảng `ambient_sounds` do admin quản lý — không còn synth WebAudio
+  như bản cũ). Watcher play/stop đặt ở **`app.vue`** (root layout, luôn mount) theo dõi
+  `focusStore.status`, **KHÔNG** ở `pages/focus.vue` — cố ý, vì `focus.vue` bị Vue hủy mỗi khi
+  điều hướng rời trang `/focus` (kể cả khi phiên vẫn `running`), nên nếu đặt watcher ở đó nhạc sẽ
+  dừng oan khi qua trang khác. `app.vue` còn theo dõi thêm `focusStore.ambientTrack` (watcher thứ
+  2) để **đổi bài ngay khi đang running** mà không cần pause/resume. Store chỉ giữ tên track
+  (`ambientTrack`, thực chất là URL file) để lưu vào phiên — không tự phát nhạc.
+  Composable còn có `preview(url)`/`stopPreview()`/`previewingUrl` (thêm 2026-07-13) — nghe thử
+  15s 1 track bằng `Audio` element RIÊNG, tạm pause track chính trong lúc preview rồi resume lại,
+  dùng trong `AmbientPlayer.vue` (cả màn chọn trước khi bắt đầu lẫn màn đang running).
 
 ```typescript
 // stores/focus.store.ts (rút gọn)

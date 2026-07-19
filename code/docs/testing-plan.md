@@ -165,18 +165,36 @@ export default defineConfig({
 | DS-02 | Hàm đọc → map snake_case→camelCase về model client | Object đúng kiểu |
 | DS-03 | Supabase trả lỗi → được lan truyền / xử lý | Error được surface |
 
-### E. Composables AI (fallback client-side) (`tests/unit/composables/`)
+### E. Composables AI (`tests/unit/composables/`)
 
-> Các composable AI gọi API Gateway nếu có `NUXT_PUBLIC_API_GATEWAY_URL`,
-> không thì dùng fallback client-side. Test cả nhánh có API (mock fetch) lẫn fallback.
+> **Cập nhật 2026-07-13**: `/emotion`, `/rag`, `/embed`, `/embed-all` đều đã deploy & live, và cả
+> `useEmotionDetector.ts`/`useRAG.ts`/`useDataService.ts` đều gửi `Authorization: Bearer
+> <access_token>` (trước đó `useEmotionDetector` không gửi gì — bug thật đã vá). Test cả nhánh có
+> API thật (mock `$fetch` + mock `getSupabase().auth.getSession()`) lẫn fallback (khi thiếu URL).
 
 | # | Test Case | Expected |
 |---|---|---|
-| CP-01 | `useEmotionDetector(journalText)` không có API → fallback regex client-side | Label hợp lệ (focused/stressed/exhausted/relaxed/unmotivated) |
-| CP-02 | `useEmotionDetector` có API → POST `/emotion`, dùng kết quả Lambda | Label + confidence từ API |
-| CP-03 | `useRAG(...)` không có API → fallback hardcode | Mảng MediaItem |
+| CP-01 | `useEmotionDetector(journalText)` không có API → fallback regex client-side (đủ cả 5 nhãn, kể cả `unmotivated`) | Label hợp lệ (focused/stressed/exhausted/relaxed/unmotivated) |
+| CP-02 | `useEmotionDetector` có API → POST `/emotion` kèm `Authorization` header, dùng kết quả Lambda | Label + confidence từ API |
+| CP-02b | `useEmotionDetector` có API nhưng session hết hạn (`access_token` rỗng) → throw lỗi rõ ràng thay vì gọi API không token | Error message "Phiên đăng nhập đã hết hạn" |
+| CP-03 | `useRAG(...)` không có API → fallback hardcode (2 item) | Mảng MediaItem |
+| CP-03b | `useRAG(...)` có API → POST `/rag` kèm `Authorization` header + `{emotion, limit}` | Mảng kết quả từ API |
 | CP-04 | `useReportExport()` không có API → tải `.md` ở client | Tạo file `.md` |
-| CP-05 | `useConfig()` → đọc đúng cờ runtime config | Giá trị đúng |
+| CP-05 | `useConfig()` → đọc đúng cờ runtime config (`ragApiUrl`/`emotionApiUrl`/`ambientApiUrl` đều fallback về `apiGatewayUrl`) | Giá trị đúng |
+| CP-06 | `useDataService().generateEmbedding(id)` → POST `/embed` kèm `Authorization` header | Gửi đúng header |
+| CP-07 | `useDataService().generateAllEmbeddings()` → POST `/embed-all` kèm `Authorization` header, trả `count` | `number` đúng |
+
+### E2. Ambient Sound (`useAmbientSound.ts`) — tính năng mới 2026-07-13
+
+| # | Test Case | Expected |
+|---|---|---|
+| AMB-01 | `preview(url)` khi KHÔNG có track chính đang phát → tạo `Audio` riêng, phát 15s rồi tự dừng | `previewingUrl.value === url` trong 15s, `null` sau đó |
+| AMB-02 | `preview(url)` khi ĐANG có track chính phát (`play()` trước đó) → pause tạm track chính (`intentionalStop=true`, không bị auto-resume listener resume lại), phát preview riêng | Track chính bị pause trong lúc preview |
+| AMB-03 | Preview kết thúc (hết 15s hoặc gọi `stopPreview()`) → resume lại track chính đúng vị trí | `audio.paused === false` sau `stopPreview()` nếu trước đó đang phát |
+| AMB-04 | Bấm `preview(url)` đúng track đang preview lần 2 → hủy sớm thay vì restart | `previewingUrl.value === null` ngay lập tức |
+| AMB-05 | `focusStore.ambientTrack` đổi giá trị trong lúc `status === 'running'` → `app.vue` watcher gọi `ambient.play(track mới)` | Track đổi ngay, không restart timer |
+| AMB-06 | `focusStore.ambientTrack` đổi giá trị trong lúc `status !== 'running'` (vd `paused`) → KHÔNG gọi `play()` ngay | Chỉ áp dụng khi resume về `running` |
+| AMB-07 | Chọn track (kể cả "Silence") trong `AmbientPlayer.vue` khi đang preview → tự gọi `stopPreview()` trước, tránh chồng tiếng | `previewingUrl.value === null` sau khi chọn |
 
 ### F. Dashboard stats (tính inline trong `pages/dashboard.vue`)
 
@@ -237,12 +255,13 @@ describe('Task cloud round-trip', () => {
 
 ## 5. Python Lambda Tests (pytest)
 
-> pytest CHỈ áp dụng cho lambda **đã có code**: `agent-bff`, `agent-action-handler`.
-> Các lambda còn lại (`emotion-detector`, `rag-recommender`, `admin-vectorizer`) hiện **chỉ có
-> README — pending implementation**, chưa viết test. `report-generator` đã bị bỏ khỏi kế hoạch
+> **Cập nhật 2026-07-13**: cả 6/6 Lambda giờ có code thật và đã deploy & live — không còn lambda
+> nào "pending implementation". **Test coverage thực tế vẫn ~0%** (quyết định có chủ đích của
+> project owner: để cuối cùng, không ưu tiên trong đợt làm AI/deploy) — bảng dưới đây là **test
+> case NÊN viết**, chưa phải test đã tồn tại. `report-generator` đã bị bỏ khỏi kế hoạch
 > (2026-07-10) — không cần test, xem `docs/PROJECT_STATE.md` mục 23.
 
-### Lambdas có code (test áp dụng ngay)
+### Lambdas có code + đã deploy (test case đề xuất)
 
 | # | Lambda | Test Case | Expected |
 |---|---|---|---|
@@ -251,14 +270,21 @@ describe('Task cloud round-trip', () => {
 | AH-01 | `agent-action-handler` | Action `create_task` → insert vào Supabase tasks | Row được tạo |
 | AH-02 | `agent-action-handler` | Action `update_task` / `delete_task` → cập nhật/xóa đúng task | DB phản ánh thay đổi |
 | AH-03 | `agent-action-handler` | Action không hỗ trợ → trả lỗi rõ ràng | Error response |
+| EMO-01 | `emotion-detector` | Text hợp lệ → `_classify()` trả 1 trong 5 nhãn app + confidence 0-1 | Label hợp lệ |
+| EMO-02 | `emotion-detector` | Không có `Authorization` header → 401 | `{"message": "Thieu Authorization..."}` |
+| EMO-03 | `emotion-detector` | Text >1000 ký tự → tự cắt còn 1000, không lỗi | 200, không throw |
+| EMO-04 | `emotion-detector` | Confidence dưới `THRESHOLD_UNMOTIVATED` → label `unmotivated` bất kể model_label gốc là gì | Label = `unmotivated` |
+| VEC-01 | `admin-vectorizer` | `/embed` với `mediaId` thật, token admin → ghi `embedding_vector` 1024 chiều | 200 + `{mediaId, dimensions:1024}` |
+| VEC-02 | `admin-vectorizer` | `/embed` với token KHÔNG phải admin → 403 | Error response, KHÔNG ghi DB |
+| VEC-03 | `admin-vectorizer` | `/embed-all` khi không có item nào `embedding_vector IS NULL` → `{count: 0}`, không lỗi | 200 |
+| VEC-04 | `admin-vectorizer` | `/embed-all` batch nhiều item → 1 lệnh gọi Cohere (mock `invoke_model`, assert `call_count == 1`) | Batch, không lặp gọi |
+| RAG-01 | `rag-recommender` | `/rag` với emotion hợp lệ + có media đã embed → trả mảng có `similarity` | Mảng non-empty |
+| RAG-02 | `rag-recommender` | `/rag` với emotion không nằm trong `EMOTION_QUERY` → dùng `DEFAULT_QUERY`, không lỗi | 200 |
+| RAG-03 | `rag-recommender` | `media_library` chưa có item nào embed → trả `[]`, không phải lỗi | 200, mảng rỗng |
 
-### Lambdas pending implementation (chưa có code → chưa test)
-
-| Lambda | Trạng thái |
-|---|---|
-| `emotion-detector` | Pending implementation (chỉ README) — chưa viết test |
-| `rag-recommender` | Pending implementation (chỉ README) — chưa viết test |
-| `admin-vectorizer` | Pending implementation (chỉ README) — chưa viết test |
+> Mock `boto3.client('bedrock-runtime').invoke_model` cho `EMO-*`/`VEC-*`/`RAG-*` (tránh gọi
+> Bedrock thật trong test) — trả sẵn 1 embedding cố định để assert phần logic downstream (ghi DB,
+> map nhãn) mà không phụ thuộc network/cost thật.
 
 ## 6. Playwright E2E Tests (Optional MVP)
 
@@ -330,7 +356,8 @@ script:
 | Exclusion | Reason |
 |---|---|
 | Offline / sync queue / Dexie / Last-Write-Wins | Đã gỡ khỏi codebase (cloud-only) — không còn module để test |
-| Lambdas pending implementation (emotion/rag/report/vectorizer) | Mới có README, chưa có code |
+| Cả 6 Lambda AI (agent/emotion/rag/vectorizer/ambient) | Đã deploy & live, nhưng **0% test coverage** — quyết định có chủ đích của project owner (để cuối cùng, không ưu tiên trong đợt làm AI/deploy 2026-07). Test case NÊN viết đã liệt kê ở §5, chưa có test nào tồn tại thật. |
+| `report-generator` | Đã bị bỏ khỏi kế hoạch hoàn toàn (2026-07-10) — không có gì để test |
 | E2E UI tests (Playwright) | Optional; manual QA đủ cho MVP |
 | Performance / load testing | Single-user app; Supabase Free Tier scales automatically |
 | Security penetration testing | Academic project; RLS policies reviewed manually |
