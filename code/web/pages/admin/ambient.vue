@@ -9,6 +9,7 @@
       <NuxtLink to="/admin/users" class="tab">Users</NuxtLink>
       <NuxtLink to="/admin/media" class="tab">Media</NuxtLink>
       <NuxtLink to="/admin/ambient" class="tab tab-active">Ambient</NuxtLink>
+      <NuxtLink to="/admin/feedback" class="tab">Feedback</NuxtLink>
     </div>
 
     <!-- ════════════ PHẦN 1: S3 FILE MANAGEMENT ════════════ -->

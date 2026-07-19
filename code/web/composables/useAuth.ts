@@ -172,6 +172,30 @@ export function useAuth() {
     return { emailPending: false }
   }
 
+  // Re-fetch the account row from public.users and refresh the local snapshot.
+  // Use this before generating anything derived from the user's identity (e.g.
+  // the worklog report) so a stale in-memory/localStorage copy (leftover from
+  // another tab, or from before an email change) never leaks into the output.
+  async function refreshCurrentUser(): Promise<void> {
+    const uid = currentUser.value?.id
+    if (!uid) return
+    const sb = getSupabase()
+    const { data: profile, error } = await sb
+      .from('users')
+      .select('email, display_name, role, status')
+      .eq('id', uid)
+      .single()
+    if (error || !profile || !currentUser.value) return
+    currentUser.value = {
+      ...currentUser.value,
+      email: (profile.email as string) || currentUser.value.email,
+      name: (profile.display_name as string) || currentUser.value.name,
+      role: profile.role === 'admin' ? 'admin' : 'user',
+      status: (profile.status as AuthUser['status']) || currentUser.value.status,
+    }
+    persistSession()
+  }
+
   function forgotPassword(_email: string): string {
     // redirectTo PHẢI nằm trong allowlist "Redirect URLs" của Supabase Auth (Dashboard),
     // nếu không Supabase âm thầm fallback về "Site URL" (mặc định localhost:3000 -> link
@@ -266,7 +290,7 @@ export function useAuth() {
 
   return {
     currentUser, isAuthenticated, isAdmin, isLoading, authError,
-    signUp, login, logout, changePassword, updateAccount, forgotPassword,
+    signUp, login, logout, changePassword, updateAccount, refreshCurrentUser, forgotPassword,
     approveUser, rejectUser, getPendingUsers, getRejectedUsers, setUserStatus, syncSession,
   }
 }

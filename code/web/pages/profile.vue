@@ -49,6 +49,25 @@
       </div>
     </div>
 
+    <!-- Feedback (users only — admins read feedback in /admin/feedback instead) -->
+    <div v-if="!isAdmin" class="card">
+      <h2 class="font-display text-lg text-ink dark:text-on-dark mb-1">Send Feedback</h2>
+      <p class="text-sm text-ink-muted dark:text-on-dark-soft mb-3">Found a bug or have an idea? Tell us — it goes straight to the team.</p>
+      <textarea
+        v-model="fbMessage"
+        rows="3"
+        class="input w-full resize-none"
+        placeholder="What's on your mind?"
+        :disabled="fbSubmitting"
+      />
+      <div class="mt-2 flex items-center justify-between">
+        <p v-if="fbSuccess" class="text-sm text-success dark:text-success">Thanks — feedback sent!</p>
+        <p v-else-if="fbError" class="text-sm text-error dark:text-error">{{ fbError }}</p>
+        <span v-else />
+        <button @click="handleSendFeedback" class="btn-primary" :disabled="fbSubmitting || !fbMessage.trim()">{{ fbSubmitting ? 'Sending' : 'Send' }}</button>
+      </div>
+    </div>
+
     <!-- Stats & Worklog (users only — admins see system-wide stats in /admin instead) -->
     <template v-if="!isAdmin">
       <div class="grid gap-4 sm:grid-cols-3">
@@ -101,6 +120,7 @@
 import { useAuth } from '~/composables/useAuth'
 import { useDataService } from '~/composables/useDataService'
 import { useReportExport } from '~/composables/useReportExport'
+import { useFeedback } from '~/composables/useFeedback'
 import dayjs from 'dayjs'
 
 definePageMeta({ middleware: ['auth'] })
@@ -108,6 +128,8 @@ definePageMeta({ middleware: ['auth'] })
 const { currentUser, isAdmin, changePassword, updateAccount } = useAuth()
 const { getTasks, getSessions } = useDataService()
 const { downloadReport, isExporting } = useReportExport()
+const { isSubmitting: fbSubmitting, submitError: fbError, submitSuccess: fbSuccess, submitFeedback } = useFeedback()
+const fbMessage = ref('')
 
 const allTasks = ref<any[]>([]); const allSessions = ref<any[]>([])
 const cpCurrent = ref(''); const cpNew = ref(''); const cpMsg = ref(''); const cpSuccess = ref(false)
@@ -166,6 +188,11 @@ async function saveAccount() {
   } finally {
     accSaving.value = false
   }
+}
+
+async function handleSendFeedback() {
+  await submitFeedback(fbMessage.value)
+  if (fbSuccess.value) fbMessage.value = ''
 }
 
 async function handleChangePassword() {

@@ -1,11 +1,12 @@
 # Admin CMS — Nuxt 4 Dashboard (Role-Gated)
 
-> Cập nhật 2026-07-08 — thêm mục **Ambient Sound** (S3 upload/list + CRUD danh sách nhạc nền).
+> Cập nhật 2026-07-19 — Thêm Feedback Management (§12): user gửi phản hồi ở `/profile`, admin đọc/đổi status ở `/admin/feedback` (migration `00017`).
+> Cập nhật 2026-07-13 — Embedding trigger (§8) đã deploy & live (trước ghi "backend chưa deploy").
 
 > **Project:** Focus Mode App (Web-Only)  
 > **Platform:** Nuxt 4 (same codebase as main app, admin middleware)  
 > **Access:** Admin-only (`public.users.role === 'admin'` + Supabase RLS `is_admin()`)  
-> **Core Features:** User approval & role management + Media library CRUD + Embedding trigger + Ambient Sound (S3 + CRUD)  
+> **Core Features:** User approval & role management + Media library CRUD + Embedding trigger + Ambient Sound (S3 + CRUD) + Feedback CMS  
 
 ---
 
@@ -37,17 +38,17 @@
                       │                │
                ┌──────▼──────┐  ┌──────▼───────┐
                │  Supabase    │  │  API Gateway  │
-               │  public.*    │  │  (chưa deploy)│
+               │  public.*    │  │  (✅ live)    │
                │  (RLS+pgvec) │  └──────┬───────┘
                └──────────────┘         │
                                  ┌──────▼───────────┐
                                  │  admin-vectorizer │
-                                 │  Lambda (README   │
-                                 │  only — no code)  │
+                                 │  Lambda            │
+                                 │  ✅ deploy & live  │
                                  └──────────────────┘
 ```
 
-Mọi read/write đi thẳng Supabase qua `useDataService` / `useAuth` (cloud-only). Không có Nitro server proxy; AI backend (API Gateway + Lambda) hiện CHƯA deploy nên nút sinh embedding sẽ báo lỗi cho tới khi cấu hình `NUXT_PUBLIC_API_GATEWAY_URL`.
+Mọi read/write đi thẳng Supabase qua `useDataService` / `useAuth` (cloud-only). Không có Nitro server proxy; AI backend (API Gateway + Lambda) **đã deploy & live** (2026-07-13), nút sinh embedding chạy được thật với `NUXT_PUBLIC_API_GATEWAY_URL` đã cấu hình sẵn.
 
 ## 2. Admin Middleware
 
@@ -97,24 +98,26 @@ The seeded demo admin (`admin@focusmode.app`) is created with `role='admin'` and
 
 ## 3. Routes & Navigation
 
-Implemented pages (a shared tab bar links Overview / Users / Media / Ambient):
+Implemented pages (a shared tab bar links Overview / Users / Media / Ambient / Feedback):
 
 ```
-/admin                → Admin overview (cards linking to Users / Media / Ambient + System Health placeholder)
+/admin                → Admin overview (cards linking to Users / Media / Ambient / Feedback + System Health placeholder)
 /admin/users          → User approval + role management + delete
 /admin/media          → Media Library list + Add/Edit dialog + embedding triggers
 /admin/ambient        → Ambient Sound: S3 file management (upload/list) + CRUD danh sách nhạc nền
+/admin/feedback       → Feedback CMS: đọc feedback user gửi từ /profile, đổi status new/read/resolved — thêm 2026-07-19
 ```
 
 > Note: there are **no** `/admin/media/add`, `/admin/media/[id]`, or `/admin/users/[id]` routes. Add/Edit media happens in a modal on `/admin/media`. Per-user detail pages are not implemented.
 
 ## 4. Admin Overview Page
 
-`pages/admin/index.vue` is currently a simple navigation hub, not a stats dashboard. It renders the shared tab bar plus three cards:
+`pages/admin/index.vue` is currently a simple navigation hub, not a stats dashboard. It renders the shared tab bar plus five cards:
 
 - **User Management** → links to `/admin/users`
 - **Media Library** → links to `/admin/media`
 - **Ambient Sound** → links to `/admin/ambient`
+- **Feedback** → links to `/admin/feedback`; shows a red "N new" badge when there are unread (`status='new'`) items (fetched via `useFeedback().listFeedback()` on mount) — thêm 2026-07-19
 - **System Health** → placeholder card (API Gateway / Lambda / Supabase monitor — **not implemented**)
 
 > TODO (backend pending): aggregate stats (total users, total focus hours, active today, leaderboard, media-by-type) are **not** built. There is no `useAdminStats` composable and no `get_total_focus_hours` RPC. Live numeric counters currently exist only on the Users and Media pages.
@@ -205,27 +208,34 @@ function rowToMedia(r: any): MediaItem {
 
 ## 8. Embedding Trigger Flow
 
-The frontend does **not** generate vectors locally and there is **no** Nitro proxy. It calls the AWS backend directly through `useDataService`:
+> ✅ **ĐÃ DEPLOY & LIVE (2026-07-13)** — không còn "intended flow", đây là luồng thật đang chạy.
+
+The frontend does **not** generate vectors locally and there is **no** Nitro proxy. It calls the AWS backend directly through `useDataService`, sending the caller's own Supabase access token (Lambda self-verifies, no API Gateway JWT authorizer — token is ES256):
 
 ```typescript
 // composables/useDataService.ts
 const { apiGatewayUrl } = useConfig()  // NUXT_PUBLIC_API_GATEWAY_URL
 
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await getSupabase().auth.getSession()
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+}
+
 async function generateEmbedding(mediaId: string): Promise<void> {
   if (!apiGatewayUrl.value)
     throw new Error('Embedding generation requires the AI backend (API Gateway not configured).')
-  await $fetch(`${apiGatewayUrl.value}/embed`, { method: 'POST', body: { mediaId } })
+  await $fetch(`${apiGatewayUrl.value}/embed`, { method: 'POST', body: { mediaId }, headers: await authHeaders() })
 }
 
 async function generateAllEmbeddings(): Promise<number> {
   if (!apiGatewayUrl.value)
     throw new Error('Embedding generation requires the AI backend (API Gateway not configured).')
-  const res = await $fetch<{ count: number }>(`${apiGatewayUrl.value}/embed-all`, { method: 'POST' })
+  const res = await $fetch<{ count: number }>(`${apiGatewayUrl.value}/embed-all`, { method: 'POST', headers: await authHeaders() })
   return res?.count ?? 0
 }
 ```
 
-Intended end-to-end flow once the backend is deployed:
+End-to-end flow (thật, đã verify):
 
 ```
 Admin clicks "Embed" / "Generate All Embeddings"
@@ -233,24 +243,29 @@ Admin clicks "Embed" / "Generate All Embeddings"
     ▼
 useDataService.generateEmbedding(id) / generateAllEmbeddings()
     │   (requires NUXT_PUBLIC_API_GATEWAY_URL — else throws)
+    │   Authorization: Bearer <admin access_token>
     ▼
 POST {API_GATEWAY_URL}/embed   |  POST {API_GATEWAY_URL}/embed-all
     │
     ▼
-Lambda: admin-vectorizer   ← spec maps to API Gateway POST /admin/vectorize
-    │   ⚠️ STATUS: README only — Lambda NOT implemented yet
-    ├── Load all-MiniLM-L6-v2 (384-dim)
-    ├── model.encode(content_text) → vector
-    └── UPDATE media_library SET embedding_vector = ...
+Lambda: admin-vectorizer   ← route /embed + /embed-all (đổi từ /admin/vectorize ban đầu)
+    │   ✅ DEPLOYED & LIVE — verify admin token in-Lambda, KHÔNG dùng service_role
+    │      (dùng chính token caller để đọc/ghi qua PostgREST — RLS là lớp kiểm tra thứ 2)
+    ├── Bedrock Cohere Embed Multilingual v3 (1024-dim, KHÔNG đóng gói ML, không cross-region)
+    ├── /embed-all: 1 lệnh gọi Bedrock cho cả batch (tới 50 item), không lặp từng item
+    └── PATCH media_library SET embedding_vector = ... (qua PostgREST, token admin)
     │
     ▼
-Supabase pgvector (VECTOR(384), ivfflat cosine index) updated
+Supabase pgvector (VECTOR(1024), ivfflat cosine index — đổi từ 384 ở migration 00015) updated
     │
     ▼
-Content becomes available to RAG similarity search (search_similar_content())
+Content becomes available to RAG similarity search (search_similar_content(), fix bug type
+mismatch ở migration 00016)
 ```
 
-> Backend status: the `admin-vectorizer` Lambda currently has a **README only — no code** (see `aws/README.md`). API Gateway is **not deployed**. Until `NUXT_PUBLIC_API_GATEWAY_URL` is set and the Lambda exists, both embedding buttons surface an error toast. There is no client-side fallback for embeddings.
+> Backend status: `admin-vectorizer` Lambda **đã deploy & live**, đã embed dữ liệu thật qua UI này.
+> Chi tiết model/kiến trúc: `docs/rag-vectorisation.md`. ⚠️ Nội dung dài (bài giảng nhiều đoạn)
+> chỉ có ~2000 ký tự đầu thực sự được embed — xem `docs/rag-vectorisation.md` §5.
 
 ## 9. Deployment
 
@@ -263,7 +278,9 @@ npm run build
 
 Access the admin section at `/admin` (behind the `auth` + `admin` middleware).
 
-> The AWS embedding backend (API Gateway + `admin-vectorizer` Lambda) is a separate, **not-yet-deployed** deliverable; there is currently no CI/CD or IaC for it.
+> The AWS embedding backend (API Gateway + `admin-vectorizer` Lambda) **đã deploy & live**
+> (2026-07-13) — xem `aws/lambdas/admin-vectorizer/DEPLOY-cmd.md`; vẫn chưa có CI/CD/IaC tự động
+> (deploy thủ công qua AWS CLI theo runbook).
 
 ## 10. Security Considerations
 
@@ -272,7 +289,7 @@ Access the admin section at `/admin` (behind the `auth` + `admin` middleware).
 | **Unauthorized access** | `middleware/admin.ts` checks `useAuth().isAdmin` (from `users.role`) on every admin route |
 | **Database writes**     | Supabase RLS `is_admin()` gates INSERT/UPDATE/DELETE on `users` and `media_library`     |
 | **Self-lockout**        | Users page hides delete/role actions on the current admin's own row                      |
-| **Vectorization cost**  | Admin-only trigger; backend (API Gateway + Lambda) gated separately — not yet deployed   |
+| **Vectorization cost**  | Admin-only trigger (Lambda tự check `role='admin'` in-Lambda, không dùng `service_role`); backend đã deploy & live |
 | **Data exposure**       | RLS: admins manage `media_library`; all authenticated users can `SELECT` it             |
 | **JWT expiry**          | Auto-refresh via Supabase SDK; failed loads surface an inline error with a fix hint     |
 
@@ -299,3 +316,28 @@ Trình duyệt không ghi thẳng S3 được, nên đi qua Lambda `ambient-audi
 - `components/AmbientPlayer.vue` nạp `listSounds(true)` (active) → render nút **Silence** + từng bài; `v-model` giờ là **URL** của track.
 - `composables/useAmbientSound.ts` phát **file MP3 thật** từ URL bằng `HTMLAudioElement` (loop + fade in/out) — thay cho nhạc synth WebAudio trước đây.
 - `focus_sessions.ambient_track` lưu URL của track đã chọn; `pages/focus.vue` tra URL → tên để hiển thị nhãn "Ambient:".
+
+## 12. Feedback Management (`/admin/feedback`) — thêm 2026-07-19
+
+Người dùng gửi phản hồi ngay trong account của họ; admin đọc tập trung qua CMS. Không cần Lambda/API Gateway — đi thẳng Supabase như Ambient Sound Phần 2.
+
+### Phía user — `pages/profile.vue`
+- Card **"Send Feedback"** (textarea + nút Send), nằm ngay dưới "Account Information". **Chỉ hiện cho user thường** (`v-if="!isAdmin"`) — admin là người đọc feedback, không cần gửi.
+- Gọi `useFeedback().submitFeedback(message)` → `INSERT` 1 dòng vào `public.feedback` với `user_id = auth.uid()`.
+
+### Phía admin — `pages/admin/feedback.vue`
+- Bảng liệt kê **tất cả** feedback (mọi user), cột: From (tên + email), Message, Status (badge), Sent (ngày), Actions.
+- Vì project không dùng cú pháp embedded-select của Supabase (`select('*, users(...)')`), trang gọi 2 query riêng rồi merge ở client: `SELECT` bảng `feedback`, sau đó `SELECT id, email, display_name FROM users WHERE id IN (...)` theo danh sách `user_id` duy nhất — xem `useFeedback().listFeedback()`.
+- Actions: **Mark read** / **Resolve** → `useFeedback().updateFeedbackStatus(id, status)` → `UPDATE feedback SET status = ...`.
+- 3 stat card ở đầu trang: Total, New, Resolved (đếm client-side từ danh sách đã tải, không phải RPC riêng).
+- Overview panel (`/admin` — mục 4 phía trên) có thêm 1 box "Feedback" link sang trang này, kèm badge đỏ "N new" nếu có dòng `status='new'`.
+
+### Bảng & RLS — `public.feedback` (migration `00017_feedback.sql`)
+| Cột | Ghi chú |
+|---|---|
+| `id`, `user_id`, `message`, `status` (`new`/`read`/`resolved`, default `new`), `created_at`, `updated_at` | `updated_at` tự cập nhật qua trigger `update_modified_column()` (dùng lại hàm chung từ `00001`) |
+
+RLS: `feedback_insert_own` (user chỉ insert được `user_id = auth.uid()`), `feedback_select_own_or_admin` (user thấy dòng của mình; admin `is_admin()` thấy tất cả), `feedback_update_admin` + `feedback_delete_admin` (chỉ admin). User **không sửa/xóa được** feedback đã gửi — tránh chỉnh sửa lại nội dung đã gửi cho admin.
+
+### Composable — `composables/useFeedback.ts`
+`submitFeedback(message)` (user), `listFeedback()` + `updateFeedbackStatus(id, status)` (admin, gated bởi RLS chứ không phải check role phía client). Export type `FeedbackItem`/`FeedbackStatus` dùng chung giữa `profile.vue` và `admin/feedback.vue`.

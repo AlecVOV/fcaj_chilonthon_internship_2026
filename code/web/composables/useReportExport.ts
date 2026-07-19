@@ -100,7 +100,10 @@ export function useReportExport() {
     exportError.value = null
     lastMessage.value = ''
     try {
-      const { currentUser } = useAuth()
+      const { currentUser, refreshCurrentUser } = useAuth()
+      // Đảm bảo email/tên lấy đúng bản mới nhất từ public.users — tránh trường hợp
+      // state cục bộ (localStorage của tab khác, hoặc chưa kịp đồng bộ) còn email cũ.
+      await refreshCurrentUser().catch(() => { /* best-effort, không chặn export */ })
       const { getTasks, getSessions } = useDataService()
       const date = dateStr || dayjs().format('YYYY-MM-DD')
 

@@ -114,6 +114,7 @@ const navItems = computed(() => {
     { to: '/focus', label: 'Focus' },
     { to: '/tasks', label: 'Tasks' },
     { to: '/agent', label: 'Agent' },
+    { to: '/guide', label: 'Guide' },
   ]
 })
 
