@@ -1,7 +1,7 @@
 <template>
   <div>
     <div v-if="tasks.length === 0" class="py-6 text-center text-sm text-ink-soft dark:text-on-dark-soft/70">
-      No tasks yet.
+      {{ t('taskList.empty') }}
     </div>
     <div v-else class="space-y-1">
       <div
@@ -12,7 +12,7 @@
         <button
           @click="taskStore.isLockedByFocus(task.id) ? null : $emit('toggle', task.id)"
           :disabled="taskStore.isLockedByFocus(task.id)"
-          :title="taskStore.isLockedByFocus(task.id) ? 'Locked — this task is in an active focus session' : ''"
+          :title="taskStore.isLockedByFocus(task.id) ? t('taskList.lockedTooltip') : ''"
           class="flex-shrink-0 flex h-5 w-5 items-center justify-center rounded-md border transition-colors"
           :class="[
             task.status === 'completed'
@@ -60,4 +60,5 @@ defineEmits<{
 }>()
 
 const taskStore = useTaskStore()
+const { t } = useLocale()
 </script>

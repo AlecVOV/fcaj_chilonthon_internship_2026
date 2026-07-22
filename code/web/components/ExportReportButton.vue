@@ -4,7 +4,7 @@
     class="btn-outline text-sm"
     :disabled="isExporting"
   >
-    {{ isExporting ? 'Exporting...' : 'Export Report' }}
+    {{ isExporting ? t('exportReport.exporting') : t('exportReport.export') }}
   </button>
   <Teleport to="body">
     <div
@@ -36,6 +36,7 @@ const emit = defineEmits<{
 }>()
 
 const { isExporting, exportError, lastMessage, downloadReport } = useReportExport()
+const { t } = useLocale()
 
 const showToast = ref(false)
 const toastType = ref<'loading' | 'success' | 'error'>('loading')
@@ -45,13 +46,13 @@ let toastTimer: ReturnType<typeof setTimeout>
 
 async function handleExport() {
   showToast.value = true; toastType.value = 'loading'
-  toastMessage.value = 'Generating report...'; toastDetail.value = ''
+  toastMessage.value = t('exportReport.generating'); toastDetail.value = ''
 
   await downloadReport() // hôm nay
   if (exportError.value) {
-    toastType.value = 'error'; toastMessage.value = 'Export failed'; toastDetail.value = exportError.value
+    toastType.value = 'error'; toastMessage.value = t('exportReport.failed'); toastDetail.value = exportError.value
   } else {
-    toastType.value = 'success'; toastMessage.value = lastMessage.value || 'Report ready'; toastDetail.value = ''
+    toastType.value = 'success'; toastMessage.value = lastMessage.value || t('exportReport.ready'); toastDetail.value = ''
   }
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => { showToast.value = false }, 4000)

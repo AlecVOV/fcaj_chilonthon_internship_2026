@@ -1,50 +1,50 @@
 <template>
   <div class="space-y-8 animate-in">
     <div>
-      <h1 class="font-display text-display-sm text-ink dark:text-on-dark">Good {{ greeting }}, {{ name }}</h1>
+      <h1 class="font-display text-display-sm text-ink dark:text-on-dark">{{ t('dashboard.greeting', { period: t('dashboard.' + greeting), name }) }}</h1>
       <p class="mt-1.5 text-sm text-ink-muted dark:text-on-dark-soft">{{ dayjs().format('dddd, MMMM D, YYYY') }}</p>
     </div>
 
     <div v-if="showOfflineToast" class="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning dark:bg-warning-muted/10 dark:border-warning-muted/30 dark:text-warning">
-      <span class="status-dot offline" /> You are offline. Changes may not be saved until your connection is restored.
+      <span class="status-dot offline" /> {{ t('dashboard.offlineWarning') }}
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div class="card">
-        <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Today's Focus</p>
+        <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.todaysFocus') }}</p>
         <p class="mt-2 font-display text-2xl text-ink dark:text-on-dark">{{ todayMinutes }}m</p>
-        <p class="mt-1 text-xs text-success dark:text-success">{{ sessionsToday }} sessions</p>
+        <p class="mt-1 text-xs text-success dark:text-success">{{ t('dashboard.sessionsCount', { n: sessionsToday }) }}</p>
       </div>
       <div class="card">
-        <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Streak</p>
+        <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.streak') }}</p>
         <p class="mt-2 font-display text-2xl text-ink dark:text-on-dark">{{ streak }}</p>
-        <p class="mt-1 text-xs text-ink-soft dark:text-on-dark-soft">consecutive days</p>
+        <p class="mt-1 text-xs text-ink-soft dark:text-on-dark-soft">{{ t('dashboard.consecutiveDays') }}</p>
       </div>
       <div class="card">
-        <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Tasks Done</p>
+        <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.tasksDone') }}</p>
         <p class="mt-2 font-display text-2xl text-ink dark:text-on-dark">{{ taskStore.completedToday.length }}</p>
-        <p class="mt-1 text-xs text-ink-soft dark:text-on-dark-soft">of {{ taskStore.totalToday.length }} today</p>
+        <p class="mt-1 text-xs text-ink-soft dark:text-on-dark-soft">{{ t('dashboard.ofToday', { total: taskStore.totalToday.length }) }}</p>
       </div>
       <div class="card">
-        <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Mood</p>
-        <p class="mt-2 font-display text-2xl capitalize text-ink dark:text-on-dark">{{ dominantMood }}</p>
-        <p class="mt-1 text-xs text-ink-soft dark:text-on-dark-soft">from last session</p>
+        <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.mood') }}</p>
+        <p class="mt-2 font-display text-2xl text-ink dark:text-on-dark">{{ dominantMood === '--' ? '--' : t('emotion.' + dominantMood) }}</p>
+        <p class="mt-1 text-xs text-ink-soft dark:text-on-dark-soft">{{ t('dashboard.fromLastSession') }}</p>
       </div>
     </div>
 
     <div class="flex flex-wrap gap-3">
-      <NuxtLink to="/focus" class="btn-primary">Start Focus Session</NuxtLink>
-      <NuxtLink to="/agent" class="btn-outline">Ask Agent for Tasks</NuxtLink>
+      <NuxtLink to="/focus" class="btn-primary">{{ t('dashboard.startFocusSession') }}</NuxtLink>
+      <NuxtLink to="/agent" class="btn-outline">{{ t('dashboard.askAgentForTasks') }}</NuxtLink>
       <ExportReportButton />
     </div>
 
     <div v-if="showAddTask" class="fixed inset-0 z-50 flex items-center justify-center bg-ink/20 backdrop-blur-sm" @click.self="showAddTask = false">
       <div class="card w-full max-w-md animate-in" @click.stop>
-        <h2 class="mb-4 font-display text-lg text-ink dark:text-on-dark">New Task</h2>
-        <input ref="taskInput" v-model="newTaskTitle" class="input mb-3" placeholder="What do you need to focus on?" @keyup.enter="handleAddTask" />
+        <h2 class="mb-4 font-display text-lg text-ink dark:text-on-dark">{{ t('dashboard.newTask') }}</h2>
+        <input ref="taskInput" v-model="newTaskTitle" class="input mb-3" :placeholder="t('dashboard.newTaskPlaceholder')" @keyup.enter="handleAddTask" />
         <div class="flex justify-end gap-2">
-          <button @click="showAddTask = false" class="btn-ghost">Cancel</button>
-          <button @click="handleAddTask" class="btn-primary" :disabled="!newTaskTitle.trim()">Add Task</button>
+          <button @click="showAddTask = false" class="btn-ghost">{{ t('tasks.cancel') }}</button>
+          <button @click="handleAddTask" class="btn-primary" :disabled="!newTaskTitle.trim()">{{ t('dashboard.addTask') }}</button>
         </div>
       </div>
     </div>
@@ -52,11 +52,11 @@
     <div class="grid gap-6 lg:grid-cols-3">
       <div class="card lg:col-span-2">
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-display text-lg text-ink dark:text-on-dark">Today's Tasks</h2>
-          <NuxtLink to="/tasks" class="link text-sm">View all</NuxtLink>
+          <h2 class="font-display text-lg text-ink dark:text-on-dark">{{ t('dashboard.todaysTasks') }}</h2>
+          <NuxtLink to="/tasks" class="link text-sm">{{ t('dashboard.viewAll') }}</NuxtLink>
         </div>
         <TaskList :tasks="taskStore.inProgressTasks.slice(0, 5)" @toggle="taskStore.requestToggle" />
-        <p v-if="taskStore.inProgressTasks.length === 0" class="py-8 text-center text-sm text-ink-soft dark:text-on-dark-soft/70">No in-progress tasks.</p>
+        <p v-if="taskStore.inProgressTasks.length === 0" class="py-8 text-center text-sm text-ink-soft dark:text-on-dark-soft/70">{{ t('dashboard.noInProgressTasks') }}</p>
       </div>
       <div class="card"><FocusTimer /></div>
     </div>
@@ -64,20 +64,20 @@
     <!-- Weekly activity — navigable week by week -->
     <div>
       <div class="mb-3 flex items-center justify-between">
-        <h2 class="font-display text-lg text-ink dark:text-on-dark">Weekly activity</h2>
+        <h2 class="font-display text-lg text-ink dark:text-on-dark">{{ t('dashboard.weeklyActivity') }}</h2>
         <div class="flex items-center gap-1 text-sm">
-          <button @click="weekOffset++" class="btn-ghost px-2 py-1" title="Previous week">←</button>
+          <button @click="weekOffset++" class="btn-ghost px-2 py-1" :title="t('dashboard.previousWeek')">←</button>
           <span class="min-w-[150px] text-center text-xs text-ink-body dark:text-on-dark-soft">{{ weekRangeLabel }}</span>
-          <button @click="weekOffset = Math.max(0, weekOffset - 1)" :disabled="weekOffset === 0" class="btn-ghost px-2 py-1 disabled:cursor-not-allowed disabled:opacity-30" title="Next week">→</button>
+          <button @click="weekOffset = Math.max(0, weekOffset - 1)" :disabled="weekOffset === 0" class="btn-ghost px-2 py-1 disabled:cursor-not-allowed disabled:opacity-30" :title="t('dashboard.nextWeek')">→</button>
         </div>
       </div>
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="card">
-          <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Focus time (minute) — hover a bar for sessions</h3>
+          <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.focusTimeChartTitle') }}</h3>
           <ChartBars :data="focusWeek" color="#cc785c" unit="m" />
         </div>
         <div class="card">
-          <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Tasks completed</h3>
+          <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.tasksCompletedChartTitle') }}</h3>
           <ChartBars :data="completedWeek" color="#5db872" />
         </div>
       </div>
@@ -86,11 +86,11 @@
     <!-- Snapshots (current state, not week-based) -->
     <div class="grid gap-4 sm:grid-cols-2">
       <div class="card">
-        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Task status</h3>
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.taskStatusChartTitle') }}</h3>
         <ChartDonut :data="statusData" />
       </div>
       <div class="card">
-        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Open tasks by priority</h3>
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.openTasksByPriorityChartTitle') }}</h3>
         <ChartHBars :data="priorityData" />
       </div>
     </div>
@@ -110,6 +110,7 @@ const { currentUser } = useAuth()
 const taskStore = useTaskStore()
 const { getSessions } = useDataService()
 const { showOfflineToast } = useOffline()
+const { t } = useLocale()
 
 const showAddTask = ref(false)
 const newTaskTitle = ref('')
@@ -151,18 +152,18 @@ const completedWeek = computed(() => weekDays.value.map((d) => {
   return { label: d.format('dd'), value: done.length, title }
 }))
 const statusData = computed(() => [
-  { label: 'Pending', value: taskStore.pendingTasks.length, color: '#8e8b82' },
-  { label: 'In Progress', value: taskStore.inProgressTasks.length, color: '#d4a017' },
-  { label: 'Completed', value: taskStore.completedTasks.length, color: '#5db872' },
+  { label: t('dashboard.statusPending'), value: taskStore.pendingTasks.length, color: '#8e8b82' },
+  { label: t('dashboard.statusInProgress'), value: taskStore.inProgressTasks.length, color: '#d4a017' },
+  { label: t('dashboard.statusCompleted'), value: taskStore.completedTasks.length, color: '#5db872' },
 ])
 const priorityData = computed(() => {
-  const open = taskStore.tasks.filter(t => t.status === 'pending' || t.status === 'in_progress')
-  const n = (p: number) => open.filter(t => (t.priority || 0) === p).length
+  const open = taskStore.tasks.filter(x => x.status === 'pending' || x.status === 'in_progress')
+  const n = (p: number) => open.filter(x => (x.priority || 0) === p).length
   return [
-    { label: 'High (P3)', value: n(3), color: '#cc785c' },
-    { label: 'Medium (P2)', value: n(2), color: '#cc785c' },
-    { label: 'Low (P1)', value: n(1), color: '#cc785c' },
-    { label: 'None', value: n(0), color: '#8e8b82' },
+    { label: t('dashboard.priorityHigh'), value: n(3), color: '#cc785c' },
+    { label: t('dashboard.priorityMedium'), value: n(2), color: '#cc785c' },
+    { label: t('dashboard.priorityLow'), value: n(1), color: '#cc785c' },
+    { label: t('dashboard.priorityNone'), value: n(0), color: '#8e8b82' },
   ]
 })
 

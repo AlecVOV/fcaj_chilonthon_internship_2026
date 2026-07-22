@@ -27,6 +27,7 @@ export function useFeedback() {
   const submitSuccess = ref(false)
 
   async function submitFeedback(message: string): Promise<void> {
+    const { t } = useLocale()
     const text = message.trim()
     if (!text || isSubmitting.value) return
     isSubmitting.value = true
@@ -34,12 +35,12 @@ export function useFeedback() {
     submitSuccess.value = false
     try {
       const uid = currentUser.value?.id
-      if (!uid) throw new Error('Bạn cần đăng nhập để gửi feedback.')
+      if (!uid) throw new Error(t('profile.notLoggedIn'))
       const { error } = await getSupabase().from('feedback').insert({ user_id: uid, message: text })
       if (error) throw error
       submitSuccess.value = true
     } catch (e: any) {
-      submitError.value = e?.message || 'Gửi feedback thất bại, thử lại sau.'
+      submitError.value = e?.message || t('profile.feedbackFailedFallback')
     } finally {
       isSubmitting.value = false
     }

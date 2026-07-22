@@ -90,18 +90,18 @@ export const useTaskStore = defineStore('task', () => {
       tasks.value = (data || []).map(rowToTask)
       sortTasks()
     } catch (e: any) {
-      loadError.value = e?.message || 'Không tải được danh sách task. Kiểm tra kết nối rồi thử lại.'
+      loadError.value = e?.message || useLocale().t('tasks.loadFailed')
       console.error('fetchTasks failed:', e?.message || e)
     } finally { isLoading.value = false }
   }
 
-  async function addTask(title: string, description?: string, opts?: { priority?: number; dueDate?: string }) {
+  async function addTask(title: string, description?: string, opts?: { priority?: number; dueDate?: string; status?: 'pending' | 'in_progress' }) {
     const userStore = useUserStore()
     if (!userStore.userId) return
     const now = new Date().toISOString()
     const task: Task = {
       id: crypto.randomUUID(), userId: userStore.userId, title, description,
-      status: 'pending', priority: opts?.priority ?? 0, durationSpent: 0,
+      status: opts?.status ?? 'pending', priority: opts?.priority ?? 0, durationSpent: 0,
       dueDate: opts?.dueDate || undefined,
       createdAt: now, updatedAt: now, isSynced: true,
     }

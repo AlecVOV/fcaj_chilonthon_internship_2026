@@ -96,6 +96,7 @@ export function useReportExport() {
 
   // dateStr = 'YYYY-MM-DD'; mặc định hôm nay. Tải .md của đúng ngày đó.
   async function downloadReport(dateStr?: string): Promise<void> {
+    const { t } = useLocale()
     isExporting.value = true
     exportError.value = null
     lastMessage.value = ''
@@ -143,9 +144,9 @@ export function useReportExport() {
       a.download = `focus-report-${date}.md`
       a.click()
       URL.revokeObjectURL(url)
-      lastMessage.value = `Đã tải báo cáo ${date}.md`
+      lastMessage.value = t('exportReport.downloaded', { date })
     } catch (e: any) {
-      exportError.value = e?.message || 'Export failed'
+      exportError.value = e?.message || t('exportReport.failed')
     } finally {
       isExporting.value = false
     }

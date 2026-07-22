@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-2">
-    <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">Ambient Sound</p>
+    <p class="text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('ambientPlayer.heading') }}</p>
     <div class="flex gap-1.5 flex-wrap">
       <button
         type="button"
@@ -10,7 +10,7 @@
           ? 'border-primary bg-primary/10 text-primary dark:bg-primary/20'
           : 'border-hairline dark:border-hairline-dark text-ink dark:text-on-dark hover:bg-canvas-card dark:hover:bg-surface-dark-soft'"
       >
-        Silence
+        {{ t('ambientPlayer.silence') }}
       </button>
       <div
         v-for="s in sounds"
@@ -25,17 +25,17 @@
           type="button"
           @click.stop="ambient.preview(s.url)"
           class="grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-black/10 dark:hover:bg-white/10"
-          :title="ambient.previewingUrl.value === s.url ? 'Stop preview' : 'Preview 15s'"
+          :title="ambient.previewingUrl.value === s.url ? t('ambientPlayer.stopPreview') : t('ambientPlayer.previewFor15s')"
         >
           <span class="text-2xs leading-none">{{ ambient.previewingUrl.value === s.url ? '■' : '▶' }}</span>
         </button>
       </div>
     </div>
-    <p v-if="loading" class="text-2xs text-ink-soft dark:text-on-dark-soft/70">Đang tải nhạc nền…</p>
+    <p v-if="loading" class="text-2xs text-ink-soft dark:text-on-dark-soft/70">{{ t('ambientPlayer.loading') }}</p>
     <p v-else-if="sounds.length === 0" class="text-2xs text-ink-soft dark:text-on-dark-soft/70">
-      Haven't gone through any ambient sounds yet. Admin can add some in Admin → Ambient.
+      {{ t('ambientPlayer.noneYet') }}
     </p>
-    <p v-else class="text-2xs text-ink-soft dark:text-on-dark-soft/70">Playing while you focus. Click ▶ to preview 15s before choosing.</p>
+    <p v-else class="text-2xs text-ink-soft dark:text-on-dark-soft/70">{{ t('ambientPlayer.playingHint') }}</p>
   </div>
 </template>
 
@@ -49,6 +49,7 @@ const emit = defineEmits<{ 'update:modelValue': [url: string | null] }>()
 
 const { listSounds } = useAmbientSounds()
 const ambient = useAmbientSound()
+const { t } = useLocale()
 const sounds = ref<AmbientSound[]>([])
 const loading = ref(true)
 

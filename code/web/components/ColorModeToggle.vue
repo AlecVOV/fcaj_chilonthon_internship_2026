@@ -5,15 +5,16 @@
     :class="isDark
       ? 'border-hairline-dark bg-surface-dark-elevated text-on-dark hover:bg-surface-dark-soft'
       : 'border-hairline bg-canvas text-ink hover:bg-canvas-card dark:border-hairline-dark dark:bg-surface-dark-elevated dark:text-on-dark dark:hover:bg-surface-dark-soft'"
-    :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+    :title="isDark ? t('colorMode.toLight') : t('colorMode.toDark')"
   >
-    {{ isDark ? 'Dark' : 'Light' }}
+    {{ isDark ? t('colorMode.dark') : t('colorMode.light') }}
   </button>
 </template>
 
 <script setup lang="ts">
 const colorMode = useCookie<string>('color-mode', { default: () => 'light' })
 const isDark = computed(() => colorMode.value === 'dark')
+const { t } = useLocale()
 
 
 function toggle() {

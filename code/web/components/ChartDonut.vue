@@ -1,6 +1,6 @@
 <template>
   <div v-if="total === 0" class="flex items-center justify-center py-6 text-xs text-ink-soft dark:text-on-dark-soft/60">
-    {{ emptyText || 'Chưa có task' }}
+    {{ emptyText || t('chart.noTasks') }}
   </div>
   <div v-else class="flex items-center gap-4">
     <div class="relative h-24 w-24 shrink-0">
@@ -42,6 +42,7 @@ const props = defineProps<{
   data: { label: string; value: number; color: string }[]
   emptyText?: string
 }>()
+const { t } = useLocale()
 
 const total = computed(() => props.data.reduce((s, d) => s + d.value, 0))
 

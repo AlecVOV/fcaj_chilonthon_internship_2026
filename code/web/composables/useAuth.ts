@@ -52,9 +52,10 @@ export function useAuth() {
   const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
   async function signUp(name: string, email: string, password?: string) {
+    const { t } = useLocale()
     const key = email.toLowerCase()
     if (key === 'admin@focusmode.app' || key === 'user@focusmode.app') {
-      throw new Error('This is a demo account. Please use Sign In with the pre-set password.')
+      throw new Error(t('login.demoAccountError'))
     }
     const sb = getSupabase()
     const { data, error } = await sb.auth.signUp({
@@ -68,13 +69,14 @@ export function useAuth() {
   }
 
   async function login(email: string, password: string): Promise<AuthUser> {
+    const { t } = useLocale()
     isLoading.value = true
     authError.value = null
     try {
       const sb = getSupabase()
       const { data, error } = await sb.auth.signInWithPassword({ email, password })
       if (error) throw error
-      if (!data.user) throw new Error('Login failed')
+      if (!data.user) throw new Error(t('login.loginFailedFallback'))
 
       const { data: profile } = await sb
         .from('users')
@@ -87,8 +89,8 @@ export function useAuth() {
 
       // Approval gate — admins always allowed; everyone else must be approved.
       if (!admin) {
-        if (status === 'pending') { await sb.auth.signOut(); throw new Error('Your account is pending admin approval.') }
-        if (status === 'rejected') { await sb.auth.signOut(); throw new Error('Your account request was rejected.') }
+        if (status === 'pending') { await sb.auth.signOut(); throw new Error(t('login.pendingApprovalError')) }
+        if (status === 'rejected') { await sb.auth.signOut(); throw new Error(t('login.rejectedError')) }
       }
 
       const u: AuthUser = {
@@ -104,7 +106,7 @@ export function useAuth() {
       persistSession()
       return u
     } catch (e: any) {
-      authError.value = e?.message || 'Login failed'
+      authError.value = e?.message || t('login.loginFailedFallback')
       throw e
     } finally {
       isLoading.value = false
@@ -120,6 +122,7 @@ export function useAuth() {
   }
 
   async function changePassword(newPassword: string, currentPassword?: string) {
+    const { t } = useLocale()
     const sb = getSupabase()
     // Re-authenticate to verify the CURRENT password before changing it.
     if (currentPassword && currentUser.value?.email) {
@@ -127,7 +130,7 @@ export function useAuth() {
         email: currentUser.value.email,
         password: currentPassword,
       })
-      if (verifyErr) throw new Error('Mật khẩu hiện tại không đúng.')
+      if (verifyErr) throw new Error(t('profile.currentPasswordWrong'))
     }
     const { error } = await sb.auth.updateUser({ password: newPassword })
     if (error) throw error
@@ -138,10 +141,11 @@ export function useAuth() {
   // in sync. Supabase may require confirming the new email — returns emailPending in
   // that case (the change only applies after the user confirms via the new address).
   async function updateAccount(updates: { name?: string; email?: string }): Promise<{ emailPending: boolean }> {
+    const { t } = useLocale()
     const sb = getSupabase()
     const uid = currentUser.value?.id
     const currentEmail = (currentUser.value?.email || '').toLowerCase()
-    if (!uid) throw new Error('Chưa đăng nhập.')
+    if (!uid) throw new Error(t('profile.notLoggedIn'))
 
     // 1) Email → change immediately via the change_my_email RPC (migration 00012).
     //    Avoids the client updateUser({email}) flow that some projects hold pending
@@ -203,7 +207,7 @@ export function useAuth() {
     const config = useRuntimeConfig()
     const redirectTo = `${config.public.appUrl}/reset-password`
     getSupabase().auth.resetPasswordForEmail(_email, { redirectTo })
-    return 'If an account exists, a password reset link has been sent to your email.'
+    return useLocale().t('login.resetSentMessage')
   }
 
   // ── Admin user-management (Supabase-backed; gated by RLS is_admin()) ───────

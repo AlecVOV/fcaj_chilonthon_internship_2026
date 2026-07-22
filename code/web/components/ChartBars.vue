@@ -1,7 +1,7 @@
 <template>
   <div>
     <div v-if="max === 0" class="flex items-center justify-center text-xs text-ink-soft dark:text-on-dark-soft/60" style="height: 120px">
-      {{ emptyText || 'No data available' }}
+      {{ emptyText || t('chart.noData') }}
     </div>
     <template v-else>
       <div class="flex items-end gap-1.5 border-b border-hairline dark:border-hairline-dark" style="height: 120px">
@@ -30,6 +30,7 @@ const props = withDefaults(defineProps<{
   unit?: string
   emptyText?: string
 }>(), { color: '#cc785c', unit: '' })
+const { t } = useLocale()
 
 const max = computed(() => Math.max(0, ...props.data.map(d => d.value)))
 // Plot area ~96px; leaves room above the tallest bar for its value label.

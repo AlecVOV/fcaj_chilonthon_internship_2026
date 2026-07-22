@@ -1,6 +1,6 @@
 <template>
   <div v-if="max === 0" class="flex items-center justify-center py-6 text-xs text-ink-soft dark:text-on-dark-soft/60">
-    {{ emptyText || 'No data available' }}
+    {{ emptyText || t('chart.noData') }}
   </div>
   <div v-else class="space-y-2">
     <div v-for="(d, i) in data" :key="i" class="flex items-center gap-2 text-xs" :title="`${d.label}: ${d.value}`">
@@ -20,6 +20,7 @@ const props = withDefaults(defineProps<{
   color?: string
   emptyText?: string
 }>(), { color: '#cc785c' })
+const { t } = useLocale()
 
 const max = computed(() => Math.max(0, ...props.data.map(d => d.value)))
 function barW(v: number) {

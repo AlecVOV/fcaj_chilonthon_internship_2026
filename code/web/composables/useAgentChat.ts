@@ -46,7 +46,7 @@ export function useAgentChat() {
         .order('updated_at', { ascending: false })
       if (e) throw e
       conversations.value = (data || []).map((r: any) => ({ id: r.id, title: r.title, updatedAt: r.updated_at }))
-    } catch (e: any) { error.value = e?.message || 'Không tải được danh sách hội thoại' }
+    } catch (e: any) { error.value = e?.message || useLocale().t('agentChat.loadConversationsFailed') }
     finally { isLoadingList.value = false }
   }
 
@@ -62,7 +62,7 @@ export function useAgentChat() {
         .order('created_at', { ascending: true })
       if (e) throw e
       messages.value = (data || []).map((r: any) => ({ role: r.role, text: r.content, timestamp: r.created_at }))
-    } catch (e: any) { error.value = e?.message || 'Không tải được tin nhắn' }
+    } catch (e: any) { error.value = e?.message || useLocale().t('agentChat.loadMessagesFailed') }
     finally { isLoadingList.value = false }
   }
 
@@ -79,7 +79,7 @@ export function useAgentChat() {
       if (e) throw e
       conversations.value = conversations.value.filter(c => c.id !== id)
       if (currentId.value === id) newConversation()
-    } catch (e: any) { error.value = e?.message || 'Không xóa được hội thoại' }
+    } catch (e: any) { error.value = e?.message || useLocale().t('agentChat.deleteConversationFailed') }
   }
 
   async function _insertMessage(conversationId: string, role: 'user' | 'agent', content: string) {
@@ -94,6 +94,7 @@ export function useAgentChat() {
   }
 
   async function sendMessage(inputText: string): Promise<void> {
+    const { t } = useLocale()
     const text = inputText.trim()
     if (!text || isLoading.value) return
     isLoading.value = true
@@ -123,9 +124,9 @@ export function useAgentChat() {
 
     // 3) Gọi agent-bff.
     try {
-      if (!apiGatewayUrl.value) throw new Error('AI agent backend chưa cấu hình (NUXT_PUBLIC_API_GATEWAY_URL).')
+      if (!apiGatewayUrl.value) throw new Error(t('agentChat.backendNotConfigured'))
       const { data: { session } } = await getSupabase().auth.getSession()
-      if (!session?.access_token) throw new Error('Phiên đăng nhập đã hết hạn — đăng nhập lại.')
+      if (!session?.access_token) throw new Error(t('agentChat.sessionExpired'))
 
       const response = await $fetch<{ responseText: string }>(`${apiGatewayUrl.value}/agent/chat`, {
         method: 'POST',
@@ -133,7 +134,7 @@ export function useAgentChat() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
 
-      const agentText = response.responseText || '(không có nội dung)'
+      const agentText = response.responseText || t('agentChat.noContent')
       messages.value.push({ role: 'agent', text: agentText, timestamp: new Date().toISOString() })
       if (convId) {
         _insertMessage(convId, 'agent', agentText).catch(() => {})
@@ -143,9 +144,9 @@ export function useAgentChat() {
       const status = e?.statusCode ?? e?.response?.status
       const backendMsg = e?.data?.message
       let text2: string
-      if (status === 429) text2 = backendMsg || 'Hệ thống AI đang quá tải hoặc bạn đã hết lượt hôm nay. Thử lại sau.'
+      if (status === 429) text2 = backendMsg || t('agentChat.overloadedFallback')
       else if (backendMsg) text2 = backendMsg
-      else text2 = 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.'
+      else text2 = t('agentChat.genericErrorFallback')
       error.value = backendMsg || e?.message || 'Agent communication failed'
       // Hiển thị lỗi (không lưu DB để không làm bẩn lịch sử).
       messages.value.push({ role: 'agent', text: text2, timestamp: new Date().toISOString() })

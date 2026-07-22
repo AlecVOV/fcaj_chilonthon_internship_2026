@@ -6,7 +6,7 @@
       <div class="flex items-center h-full">
         <div class="flex items-center gap-2 mr-8">
           <NuxtLink to="/" class="font-display font-normal text-lg tracking-tight hover:opacity-80 transition-opacity">
-            FCAJ Worklog Repository 
+            {{ t('nav.brand') }}
           </NuxtLink>
         </div>
 
@@ -27,16 +27,17 @@
 
         <!-- Logged-out nav links -->
         <nav v-else class="hidden md:flex items-center h-full gap-1">
-          <a href="/#" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors">About the Product</a>
+          <a href="/#" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors">{{ t('nav.aboutProduct') }}</a>
           <!-- <a href="/#how-it-works" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors">How it works</a> -->
           <NuxtLink to="/author" class="flex items-center h-full px-3 text-sm font-medium text-ink-muted hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors" :class="$route.path === '/author' ? 'text-ink dark:text-on-dark' : ''">
-            About the Author
+            {{ t('nav.aboutAuthor') }}
           </NuxtLink>
         </nav>
       </div>
 
       <!-- Right side -->
       <div class="flex items-center gap-3 h-full">
+        <LocaleToggle />
         <ColorModeToggle />
 
         <!-- Logged-in user area -->
@@ -53,7 +54,7 @@
               @click="logout"
               class="rounded-md px-2.5 py-1 text-sm text-ink-muted hover:bg-canvas-card hover:text-error dark:text-on-dark-soft dark:hover:bg-surface-dark-elevated dark:hover:text-error transition-colors"
             >
-              Sign out
+              {{ t('nav.signOut') }}
             </button>
           </div>
         </template>
@@ -61,7 +62,7 @@
         <!-- Logged-out CTA -->
         <template v-else>
           <NuxtLink to="/login" class="rounded-md border px-2.5 py-1 text-sm font-medium text-ink hover:text-ink dark:text-on-dark dark:hover:text-on-dark transition-colors" style="background: rgb(204 120 92 / var(--tw-border-opacity, 1));">
-            Use our product
+            {{ t('nav.useProduct') }}
           </NuxtLink>
         </template>
       </div>
@@ -98,23 +99,24 @@
 import { useAuth } from '~/composables/useAuth'
 
 const { currentUser: authUser, isAdmin, logout } = useAuth()
+const { t } = useLocale()
 
 // User nav links — admin sees only admin links
 const navItems = computed(() => {
   if (isAdmin.value) {
     return [
-      { to: '/admin', label: 'Overview' },
-      { to: '/admin/users', label: 'Users' },
-      { to: '/admin/media', label: 'Media' },
-      { to: '/profile', label: 'Profile' },
+      { to: '/admin', label: t('nav.overview') },
+      { to: '/admin/users', label: t('nav.users') },
+      { to: '/admin/media', label: t('nav.media') },
+      { to: '/profile', label: t('nav.profile') },
     ]
   }
   return [
-    { to: '/dashboard', label: 'Dashboard' },
-    { to: '/focus', label: 'Focus' },
-    { to: '/tasks', label: 'Tasks' },
-    { to: '/agent', label: 'Agent' },
-    { to: '/guide', label: 'Guide' },
+    { to: '/dashboard', label: t('nav.dashboard') },
+    { to: '/focus', label: t('nav.focus') },
+    { to: '/tasks', label: t('nav.tasks') },
+    { to: '/agent', label: t('nav.agent') },
+    { to: '/guide', label: t('nav.guide') },
   ]
 })
 

@@ -1,10 +1,10 @@
 <template>
   <div class="text-center space-y-4">
     <p v-if="!store.isIdle && !store.isFinished" class="text-2xs uppercase tracking-wider text-ink-soft dark:text-on-dark-soft">
-      Timer
+      {{ t('focusTimer.timerLabel') }}
     </p>
     <p v-else class="text-2xs uppercase tracking-wider text-ink-soft dark:text-on-dark-soft">
-      Start a Focus Session
+      {{ t('focusTimer.startPrompt') }}
     </p>
 
     <!-- Timer Display -->
@@ -26,7 +26,7 @@
     <!-- Quick Start Button -->
     <div v-if="store.isIdle || store.isFinished">
       <NuxtLink to="/focus" class="btn-primary">
-        Go to Focus
+        {{ t('focusTimer.goToFocus') }}
       </NuxtLink>
     </div>
 
@@ -37,14 +37,14 @@
         @click="store.pause()"
         class="btn-outline text-sm"
       >
-        Pause
+        {{ t('focusTimer.pause') }}
       </button>
       <button
         v-if="store.isPaused"
         @click="store.resume()"
         class="btn-primary text-sm"
       >
-        Resume
+        {{ t('focusTimer.resume') }}
       </button>
     </div>
   </div>
@@ -54,4 +54,5 @@
 import { useFocusStore } from '~/stores/focus.store'
 
 const store = useFocusStore()
+const { t } = useLocale()
 </script>

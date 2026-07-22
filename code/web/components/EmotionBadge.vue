@@ -1,9 +1,9 @@
 <template>
   <span
-    class="badge capitalize"
+    class="badge"
     :class="badgeClass"
   >
-    {{ label }}
+    {{ t('emotion.' + label) }}
   </span>
 </template>
 
@@ -12,5 +12,6 @@ defineProps<{
   label: string
 }>()
 
+const { t } = useLocale()
 const badgeClass = 'badge-coral'
 </script>
