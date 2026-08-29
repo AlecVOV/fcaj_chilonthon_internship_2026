@@ -14,7 +14,7 @@ export const vi = {
   nav: {
     brand: 'FCAJ Worklog Repository', dashboard: 'Tổng quan', focus: 'Tập trung', tasks: 'Công việc',
     agent: 'Trợ lý AI', guide: 'Hướng dẫn', overview: 'Tổng quan', users: 'Người dùng', media: 'Media',
-    profile: 'Hồ sơ', signOut: 'Đăng xuất', aboutProduct: 'Về sản phẩm',
+    profile: 'Hồ sơ', notes: 'Ghi chú', signOut: 'Đăng xuất', aboutProduct: 'Về sản phẩm',
     aboutAuthor: 'Về tác giả', useProduct: 'Dùng thử sản phẩm',
   },
 
@@ -113,10 +113,11 @@ export const vi = {
     mood: 'Tâm trạng', fromLastSession: 'từ phiên gần nhất',
     startFocusSession: 'Bắt đầu phiên tập trung', askAgentForTasks: 'Nhờ Agent tạo công việc',
     newTask: 'Công việc mới', newTaskPlaceholder: 'Bạn cần tập trung vào việc gì?', addTask: 'Thêm công việc',
-    todaysTasks: 'Công việc hôm nay', viewAll: 'Xem tất cả', noInProgressTasks: 'Không có công việc đang thực hiện.',
+    todaysTasks: 'Công việc hôm nay', viewAll: 'Xem tất cả', noActiveTasks: 'Không có công việc nào đang chờ hoặc đang thực hiện.',
     weeklyActivity: 'Hoạt động trong tuần', previousWeek: 'Tuần trước', nextWeek: 'Tuần sau',
     thisWeek: 'tuần này',
-    focusTimeChartTitle: 'Thời gian tập trung (phút) — di chuột vào cột để xem chi tiết phiên',
+    weeklyLineChartTitle: 'Phút tập trung & công việc hoàn thành — di chuột vào điểm để xem chi tiết',
+    focusTimeChartTitle: 'Thời gian tập trung (phút)',
     tasksCompletedChartTitle: 'Công việc đã hoàn thành', taskStatusChartTitle: 'Trạng thái công việc',
     openTasksByPriorityChartTitle: 'Công việc đang mở theo mức ưu tiên',
     statusPending: 'Chưa bắt đầu', statusInProgress: 'Đang thực hiện', statusCompleted: 'Hoàn thành',
@@ -139,7 +140,8 @@ export const vi = {
     deleteTaskTitle: 'Xóa công việc', deleteConfirm: 'Xóa {title}? Không thể hoàn tác.',
     deleting: 'Đang xóa', lockedTooltip: 'Đang khóa — công việc này đang trong một phiên tập trung',
     markPending: 'Đánh dấu chưa bắt đầu', markComplete: 'Đánh dấu hoàn thành',
-    tabPending: 'Chưa bắt đầu', tabInProgress: 'Đang thực hiện', tabCompleted: 'Hoàn thành',
+    tabActive: 'Đang làm', tabPending: 'Chưa bắt đầu', tabInProgress: 'Đang thực hiện', tabCompleted: 'Hoàn thành',
+    completionRate: 'Hoàn thành {pct}% — {done}/{total} công việc',
     titleRequired: 'Cần nhập tiêu đề.', saveFailed: 'Lưu thay đổi thất bại.',
     addFailed: 'Thêm công việc thất bại. Vui lòng thử lại.', deleteFailed: 'Xóa công việc thất bại.',
     loadFailed: 'Không tải được danh sách task. Kiểm tra kết nối rồi thử lại.',
@@ -163,6 +165,13 @@ export const vi = {
     recommendedContent: 'Nội dung gợi ý', skip: 'Bỏ qua', saveAndFinish: 'Lưu & Kết thúc',
     saving: 'Đang lưu...', saveFailedFallback: 'Không lưu được phiên. Kiểm tra kết nối rồi thử lại.',
     statusRunning: 'đang chạy', statusPaused: 'tạm dừng',
+    customDuration: 'Tùy chỉnh', minutes: 'phút',
+    enableBreaks: 'Nghỉ ngơi sau phiên này',
+    shortBreakLabel: 'Nghỉ ngắn', longBreakLabel: 'Nghỉ dài',
+    breakOfferTitle: 'Làm tốt lắm! Nghỉ một chút nhé?',
+    shortBreakBtn: 'Nghỉ ngắn ({minutes} phút)', longBreakBtn: 'Nghỉ dài ({minutes} phút)',
+    skipBreak: 'Bỏ qua — mình xong việc rồi',
+    onBreak: 'Đang nghỉ', endBreakEarly: 'Kết thúc nghỉ',
   },
 
   agent: {
@@ -211,23 +220,31 @@ export const vi = {
   guide: {
     heading: 'Hướng dẫn sử dụng', subheading: 'Tổng quan nhanh mọi tính năng trong FCAJ Worklog Repository.',
     s1Title: '1. Tổng quan', s1Tagline: 'Bức tranh hằng ngày của bạn.',
-    s1P1: 'Hiển thị tổng thời gian tập trung, số phiên và mức hoàn thành công việc trong hôm nay ngay trong một cái nhìn.',
-    s1P2: 'Biểu đồ phân tích thời gian tập trung theo giờ và theo tâm trạng, giúp bạn nhận ra khung giờ làm việc hiệu quả nhất.',
+    s1P1: 'Hiển thị tổng thời gian tập trung, số phiên, số công việc đã xong và tâm trạng trong hôm nay ngay trong một cái nhìn. <strong>Công việc hôm nay</strong> giờ liệt kê cả công việc chưa bắt đầu lẫn đang thực hiện — không cần bắt đầu công việc trước mới thấy nó ở đây.',
+    s1P2: '<strong>Hoạt động trong tuần</strong> vẽ chung phút tập trung và số công việc hoàn thành trên 1 biểu đồ để dễ so sánh; dùng mũi tên phía trên để xem tuần trước. Bên dưới là Trạng thái công việc và Công việc đang mở theo mức ưu tiên, cho biết tình hình hiện tại.',
     s2Title: '2. Tập trung', s2Tagline: 'Chạy một phiên làm việc sâu có hẹn giờ.',
-    s2P1: 'Chọn một công việc (không bắt buộc), đặt thời lượng, rồi bắt đầu đồng hồ.',
+    s2P1: 'Chọn một công việc (không bắt buộc — chỉ công việc đang thực hiện mới liên kết được), chọn thời lượng — 15/25/45 phút hoặc bấm <strong>Tùy chỉnh</strong> để nhập số phút bất kỳ — rồi bắt đầu đồng hồ.',
     s2P2: 'Chọn một bản nhạc nền — nhạc vẫn tiếp tục phát kể cả khi bạn chuyển sang trang khác trong lúc phiên đang chạy.',
-    s2P3: 'Khi phiên kết thúc, bạn có thể ghi lại tâm trạng và một đoạn nhật ký ngắn.',
+    s2P3: 'Bật <strong>Nghỉ ngơi sau phiên này</strong> trước khi bắt đầu để có đồng hồ đếm nghỉ ngắn hoặc dài ngay sau khi ghi lại phiên. Thời gian nghỉ không bao giờ được lưu vào worklog — chỉ là bộ đếm giờ đơn thuần.',
+    s2P4: 'Khi phiên kết thúc, bạn có thể ghi lại tâm trạng và một đoạn nhật ký ngắn.',
     s3Title: '3. Công việc', s3Tagline: 'Lên kế hoạch và theo dõi việc bạn đang làm.',
     s3P1: 'Tạo công việc thủ công, hoặc dùng <strong>Trợ lý công việc</strong> ở trang Agent — mô tả việc cần làm bằng ngôn ngữ tự nhiên và agent sẽ tạo công việc giúp bạn, hỏi lại khi cần (ví dụ mức ưu tiên).',
-    s3P2: 'Đánh dấu công việc là đang thực hiện hoặc đã hoàn thành; công việc hoàn thành sẽ xuất hiện trong Lịch sử Worklog.',
+    s3P2: 'Tab <strong>Đang làm</strong> gộp chung công việc chưa bắt đầu và đang thực hiện thành 1 danh sách — tick vào ô vuông của bất kỳ công việc nào để đánh dấu hoàn thành trực tiếp, không cần chuyển sang "Đang thực hiện" trước mới xong được. Mức ưu tiên hiện dạng thẻ màu ngay cạnh tiêu đề, và thanh tiến độ phía trên theo dõi tỷ lệ hoàn thành tổng thể.',
+    s3P3: 'Kéo 1 dòng để sắp xếp lại danh sách Đang làm — thứ tự mới tự động được lưu. Công việc hoàn thành chuyển sang tab riêng và xuất hiện trong Lịch sử Worklog.',
     s4Title: '4. Agent', s4Tagline: 'Trò chuyện với trợ lý AI của bạn.',
     s4P1: 'Nhờ agent tạo, cập nhật hoặc sắp xếp công việc — cũng có thể chỉ hỏi về khối lượng công việc hiện tại.',
     s4P2: 'Các đoạn hội thoại được lưu lại, bạn có thể mở lại đoạn chat trước đó từ thanh bên.',
     s4P3: 'Các thao tác hàng loạt (VD: "xóa hết task đang chờ và thêm 5 task mới này") có thể mất nhiều thời gian hơn để xử lý — nếu thấy thông báo "Service Unavailable", thường là do yêu cầu mất quá nhiều thời gian; hãy thử chia nhỏ thành nhiều yêu cầu.',
-    s5Title: '5. Hồ sơ & Lịch sử Worklog', s5Tagline: 'Quản lý tài khoản và xuất công việc của bạn.',
-    s5P1: 'Sửa tên hoặc email — thay đổi email có hiệu lực ngay (đây cũng là email đăng nhập của bạn).',
+    s5Title: '7. Hồ sơ & Lịch sử Worklog', s5Tagline: 'Quản lý tài khoản và xuất công việc của bạn.',
+    s5P1: 'Mở icon avatar ở góc phải trên cùng → <strong>Hồ sơ</strong> (cùng menu với Ghi chú và Đăng xuất). Sửa tên hoặc email — thay đổi email có hiệu lực ngay (đây cũng là email đăng nhập của bạn).',
     s5P2: 'Lịch sử Worklog liệt kê từng ngày bạn đã làm việc; bấm <strong>Báo cáo</strong> để tải bản tóm tắt Markdown của ngày đó (thời gian tập trung, công việc, tâm trạng, nhật ký).',
     s5P3: 'Gửi phản hồi về app ngay từ trang này — team sẽ đọc mọi phản hồi gửi lên.',
+    s6Title: '5. Ghi chú', s6Tagline: 'Sổ ghi chú cá nhân, hỗ trợ Markdown.',
+    s6P1: 'Mở icon avatar ở góc phải trên cùng → <strong>Ghi chú</strong>. Viết gì cũng được — heading, danh sách, <strong>in đậm</strong>, `code` — đều hỗ trợ Markdown.',
+    s6P2: 'Bấm <strong>Lưu</strong> để chuyển sang xem bản render; bấm <strong>Chỉnh sửa</strong> để quay lại viết. Mỗi tài khoản chỉ có 1 ghi chú — đây là 1 sổ nháp duy nhất, không phải danh sách nhiều ghi chú riêng.',
+    s7Title: '6. Thông báo', s7Tagline: 'Biết tin mới mà không cần lục lại release note.',
+    s7P1: 'Icon chuông trên header hiện các cập nhật mà team đã đăng về tính năng mới hoặc thay đổi.',
+    s7P2: 'Chấm đỏ nghĩa là có thông báo bạn chưa xem — bấm vào chuông để đọc, chấm đỏ tự động biến mất.',
     flowTitle: 'Luồng: tạo và hoàn thành một công việc',
     flowTagline: 'Hai cách để đi từ một ý tưởng đến một phiên làm việc đã được ghi lại và nhìn nhận cảm xúc.',
     flowManualTitle: 'Thủ công',
@@ -248,6 +265,7 @@ export const vi = {
 
   admin: {
     tabOverview: 'Tổng quan', tabUsers: 'Người dùng', tabMedia: 'Media', tabAmbient: 'Âm thanh nền', tabFeedback: 'Phản hồi',
+    tabAnnouncements: 'Thông báo',
 
     overview: {
       adminPanelTitle: 'Trang quản trị', adminPanelSubtitle: 'Quản lý hệ thống & phân tích',
@@ -259,6 +277,8 @@ export const vi = {
       ambientDesc: 'Upload nhạc nền lên S3 & quản lý danh sách nhạc hiển thị cho user.',
       feedbackTitle: 'Phản hồi',
       feedbackDesc: 'Đọc phản hồi của người dùng về app và đánh dấu đã xử lý.',
+      announcementsTitle: 'Thông báo',
+      announcementsDesc: 'Đăng thông báo tính năng mới — hiện cho mọi user qua icon chuông.',
       newBadge: '{n} mới',
       systemHealthTitle: 'Tình trạng hệ thống',
       systemHealthDesc: 'Trạng thái API Gateway, lượt gọi Lambda, giám sát kết nối Supabase.',
@@ -330,6 +350,12 @@ export const vi = {
       deleteFailedFlash: 'Xóa thất bại', loadSoundsFailedFlash: 'Không tải được danh sách',
     },
 
+    announcements: {
+      title: 'Quản lý thông báo', newAction: 'Thông báo mới',
+      titleLabel: 'Tiêu đề', titlePlaceholder: 'VD: Tính năng mới: gợi ý RAG',
+      messageLabel: 'Nội dung', messagePlaceholder: 'Mô tả thay đổi hoặc tính năng mới',
+    },
+
     feedback: {
       title: 'Quản lý phản hồi',
       migrationHint: 'Thường do chưa chạy migration <code>00017_feedback.sql</code>.',
@@ -349,6 +375,22 @@ export const vi = {
   },
 
   taskList: { empty: 'Chưa có công việc nào.', lockedTooltip: 'Đang khóa — công việc này đang trong một phiên tập trung' },
+
+  announcements: {
+    title: 'Có gì mới', empty: 'Chưa có thông báo nào.',
+  },
+
+  notes: {
+    title: 'Ghi chú', lastSaved: 'Lưu lần cuối {date}',
+    previewBtn: 'Xem trước', editBtn: 'Chỉnh sửa',
+    placeholder: 'Viết gì cũng được — hỗ trợ Markdown (heading, danh sách, **in đậm**, `code`)…',
+    loadFailed: 'Không tải được ghi chú.', saveFailed: 'Không lưu được ghi chú.',
+  },
+
+  guideDialog: {
+    title: 'Mới dùng app?', body: 'Xem nhanh hướng dẫn từng tính năng trước khi bắt đầu nhé.',
+    dismiss: 'Để sau', open: 'Mở hướng dẫn',
+  },
 
   ambientPlayer: {
     heading: 'Âm thanh nền', silence: 'Yên lặng', loading: 'Đang tải nhạc nền…',

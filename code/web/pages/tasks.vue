@@ -1,11 +1,19 @@
 <template>
   <div class="animate-in">
     <div class="mb-6 flex items-center justify-between">
-      <h1 class="font-display text-display-sm text-ink dark:text-on-dark">{{ t('tasks.title') }}</h1>
+      <div>
+        <h1 class="font-display text-display-sm text-ink dark:text-on-dark">{{ t('tasks.title') }}</h1>
+        <p v-if="taskStore.tasks.length > 0" class="mt-1 text-xs text-ink-muted dark:text-on-dark-soft">
+          {{ t('tasks.completionRate', { pct: completionPct, done: taskStore.completedTasks.length, total: taskStore.tasks.length }) }}
+        </p>
+      </div>
       <div class="flex gap-2">
         <NuxtLink to="/agent" class="btn-outline text-sm">{{ t('tasks.addViaAgent') }}</NuxtLink>
         <button @click="openAdd" class="btn-primary text-sm">{{ t('tasks.addTaskBtn') }}</button>
       </div>
+    </div>
+    <div v-if="taskStore.tasks.length > 0" class="mb-6 h-1.5 w-full overflow-hidden rounded-full bg-hairline dark:bg-hairline-dark">
+      <div class="h-full rounded-full bg-success transition-[width] duration-500" :style="{ width: completionPct + '%' }" />
     </div>
 
     <div class="mb-4 flex flex-wrap gap-2">
@@ -69,9 +77,15 @@
     </div>
     <div v-else class="card !p-0 overflow-hidden">
       <table class="table-base">
-        <thead><tr><th class="w-10" /><th>{{ t('tasks.tableTitle') }}</th><th class="hidden md:table-cell">{{ t('tasks.tableStatus') }}</th><th class="hidden md:table-cell">{{ t('tasks.tablePriority') }}</th><th class="hidden md:table-cell">{{ t('tasks.tableReview') }}</th><th class="w-24 text-right">{{ t('tasks.tableActions') }}</th></tr></thead>
+        <thead><tr><th class="w-10" /><th>{{ t('tasks.tableTitle') }}</th><th v-if="activeTab === 'active'" class="hidden md:table-cell">{{ t('tasks.tableStatus') }}</th><th class="hidden md:table-cell">{{ t('tasks.tableReview') }}</th><th class="w-24 text-right">{{ t('tasks.tableActions') }}</th></tr></thead>
         <tbody>
-          <tr v-for="task in filteredTasks" :key="task.id">
+          <tr v-for="task in filteredTasks" :key="task.id"
+            :draggable="activeTab === 'active'"
+            @dragstart="activeTab === 'active' && (dragId = task.id)"
+            @dragover.prevent
+            @drop="activeTab === 'active' && handleDrop(task.id)"
+            :class="activeTab === 'active' ? 'cursor-grab active:cursor-grabbing' : ''"
+          >
             <td class="text-center">
               <button @click="handleToggle(task)" :disabled="taskStore.isLockedByFocus(task.id)"
                 :title="taskStore.isLockedByFocus(task.id) ? t('tasks.lockedTooltip') : (task.status === 'completed' ? t('tasks.markPending') : t('tasks.markComplete'))"
@@ -85,12 +99,14 @@
               </button>
             </td>
             <td>
-              <p class="text-sm font-medium" :class="task.status === 'completed' ? 'line-through text-ink-soft/40 dark:text-on-dark-soft/40' : 'text-ink dark:text-on-dark'">{{ task.title }}</p>
-              <p v-if="task.description" class="mt-0.5 text-xs text-ink-muted dark:text-on-dark-soft line-clamp-1">{{ task.description }}</p>
+              <div class="flex items-center gap-1.5">
+                <p class="text-sm font-medium" :class="task.status === 'completed' ? 'line-through text-ink-soft/40 dark:text-on-dark-soft/40' : 'text-ink dark:text-on-dark'">{{ task.title }}</p>
+                <span v-if="task.priority > 0" class="badge shrink-0" :class="priorityBadgeClass(task.priority)">P{{ task.priority }}</span>
+              </div>
+              <p v-if="task.description" class="mt-0.5 text-xs text-ink-muted dark:text-on-dark-soft whitespace-pre-wrap">{{ task.description }}</p>
               <p v-if="task.dueDate" class="mt-0.5 text-2xs text-ink-soft dark:text-on-dark-soft/70">{{ t('tasks.due', { date: dayjs(task.dueDate).format('MMM D, YYYY') }) }}</p>
             </td>
-            <td class="hidden md:table-cell"><span class="badge" :class="statusBadgeClass(task.status)">{{ statusLabel(task.status) }}</span></td>
-            <td class="hidden md:table-cell text-ink-muted dark:text-on-dark-soft">{{ task.priority > 0 ? 'P' + task.priority : '--' }}</td>
+            <td v-if="activeTab === 'active'" class="hidden md:table-cell"><span class="badge" :class="statusBadgeClass(task.status)">{{ statusLabel(task.status) }}</span></td>
             <td class="hidden md:table-cell text-sm text-ink-soft dark:text-on-dark-soft max-w-[150px] truncate">{{ task.review || '--' }}</td>
             <td class="text-right whitespace-nowrap">
               <button @click="openEdit(task)" class="link text-sm">{{ t('tasks.edit') }}</button>
@@ -173,7 +189,11 @@ definePageMeta({ middleware: ['auth'] })
 
 const taskStore = useTaskStore()
 const { t } = useLocale()
-const activeTab = ref<'pending' | 'in_progress' | 'completed'>('pending')
+// Pending + In Progress are merged into one "Active" view — completing a task no
+// longer requires switching tabs or opening the Edit dialog to move it along a
+// pending → in_progress → completed chain first; the checkbox completes it directly
+// regardless of which of the two active statuses it's currently in.
+const activeTab = ref<'active' | 'completed'>('active')
 const showAdd = ref(false)
 const newTitle = ref('')
 const newDescription = ref('')
@@ -202,17 +222,37 @@ const deleteError = ref('')
 const deleting = ref(false)
 
 const tabs = computed(() => [
-  { key: 'pending' as const, label: t('tasks.tabPending'), count: taskStore.pendingTasks.length,
+  { key: 'active' as const, label: t('tasks.tabActive'), count: taskStore.pendingTasks.length + taskStore.inProgressTasks.length,
     activeClass: 'bg-ink-soft text-white', idleClass: 'text-ink-muted hover:bg-canvas-card dark:text-on-dark-soft dark:hover:bg-surface-dark-soft' },
-  { key: 'in_progress' as const, label: t('tasks.tabInProgress'), count: taskStore.inProgressTasks.length,
-    activeClass: 'bg-warning text-ink', idleClass: 'text-warning hover:bg-warning/10' },
   { key: 'completed' as const, label: t('tasks.tabCompleted'), count: taskStore.completedTasks.length,
     activeClass: 'bg-success text-white', idleClass: 'text-success hover:bg-success/10' },
 ])
-const filteredTasks = computed(() =>
-  activeTab.value === 'pending' ? taskStore.pendingTasks
-    : activeTab.value === 'in_progress' ? taskStore.inProgressTasks
-      : taskStore.completedTasks)
+// Active tab: pending + in-progress merged into one drag-orderable list (sortOrder),
+// no more per-status sub-tabs to click through. Priority still shows as a badge per
+// row (see priorityBadgeClass) but no longer dictates the list order — sortOrder does,
+// so a manual drag actually sticks instead of being re-sorted away on next render.
+const filteredTasks = computed(() => {
+  if (activeTab.value === 'completed') return taskStore.completedTasks
+  return [...taskStore.inProgressTasks, ...taskStore.pendingTasks].sort((a, b) => a.sortOrder - b.sortOrder)
+})
+
+const completionPct = computed(() => {
+  if (taskStore.tasks.length === 0) return 0
+  return Math.round((taskStore.completedTasks.length / taskStore.tasks.length) * 100)
+})
+
+// Drag-and-drop reordering (Active tab only) — native HTML5 DnD, no library.
+const dragId = ref<string | null>(null)
+function handleDrop(targetId: string) {
+  if (!dragId.value || dragId.value === targetId) { dragId.value = null; return }
+  const ids = filteredTasks.value.map((t: any) => t.id)
+  const from = ids.indexOf(dragId.value)
+  const to = ids.indexOf(targetId)
+  if (from === -1 || to === -1) { dragId.value = null; return }
+  ids.splice(to, 0, ids.splice(from, 1)[0])
+  taskStore.reorderTasks(ids).catch(() => {})
+  dragId.value = null
+}
 
 function statusLabel(status: string) {
   if (status === 'in_progress') return t('tasks.tabInProgress')
@@ -224,6 +264,11 @@ function statusBadgeClass(status: string) {
   return status === 'completed' ? 'bg-success text-white'
     : status === 'in_progress' ? 'bg-warning text-ink'
       : 'bg-ink-soft text-white' // pending (default)
+}
+function priorityBadgeClass(priority: number) {
+  return priority >= 3 ? 'bg-error/15 text-error dark:bg-error/20'
+    : priority === 2 ? 'bg-warning/20 text-warning dark:bg-warning/25'
+      : 'bg-ink-soft/15 text-ink-soft dark:bg-on-dark-soft/15 dark:text-on-dark-soft'
 }
 
 onMounted(() => taskStore.fetchTasks())

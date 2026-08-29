@@ -2,16 +2,41 @@
   <div class="animate-in">
     <h1 class="mb-6 font-display text-display-sm text-ink dark:text-on-dark">{{ t('focus.title') }}</h1>
 
-    <div v-if="focusStore.isIdle" class="grid gap-6 lg:grid-cols-3 lg:items-start">
+    <div v-if="focusStore.isIdle && !breakOffer && !breakRunning" class="grid gap-6 lg:grid-cols-3 lg:items-start">
       <div class="card lg:col-span-2 space-y-6">
         <div>
           <label class="block mb-2 text-xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('focus.durationLabel') }}</label>
           <div class="flex gap-2">
-            <button v-for="d in durations" :key="d.label" @click="selectedDuration = d.seconds"
+            <button v-for="d in durations" :key="d.label" @click="selectPreset(d.seconds)"
               class="flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
-              :class="selectedDuration === d.seconds ? 'border-primary bg-primary/10 text-primary dark:bg-primary/20' : 'border-hairline dark:border-hairline-dark text-ink dark:text-on-dark hover:bg-canvas-card dark:hover:bg-surface-dark-soft'">
+              :class="!useCustomDuration && selectedDuration === d.seconds ? 'border-primary bg-primary/10 text-primary dark:bg-primary/20' : 'border-hairline dark:border-hairline-dark text-ink dark:text-on-dark hover:bg-canvas-card dark:hover:bg-surface-dark-soft'">
               {{ d.label }}
             </button>
+            <button @click="useCustomDuration = true"
+              class="flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+              :class="useCustomDuration ? 'border-primary bg-primary/10 text-primary dark:bg-primary/20' : 'border-hairline dark:border-hairline-dark text-ink dark:text-on-dark hover:bg-canvas-card dark:hover:bg-surface-dark-soft'">
+              {{ t('focus.customDuration') }}
+            </button>
+          </div>
+          <div v-if="useCustomDuration" class="mt-2 flex items-center gap-2">
+            <input type="number" min="1" max="180" v-model.number="customMinutes" class="input w-24" />
+            <span class="text-sm text-ink-muted dark:text-on-dark-soft">{{ t('focus.minutes') }}</span>
+          </div>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 text-sm text-ink-body dark:text-on-dark-soft">
+            <input type="checkbox" v-model="breaksEnabled" class="h-4 w-4 rounded border-hairline dark:border-hairline-dark" />
+            {{ t('focus.enableBreaks') }}
+          </label>
+          <div v-if="breaksEnabled" class="mt-2 grid grid-cols-2 gap-3">
+            <div>
+              <label class="block mb-1 text-2xs text-ink-muted dark:text-on-dark-soft">{{ t('focus.shortBreakLabel') }}</label>
+              <div class="flex items-center gap-2"><input type="number" min="1" max="60" v-model.number="shortBreakMinutes" class="input" /><span class="text-2xs text-ink-soft dark:text-on-dark-soft/70">{{ t('focus.minutes') }}</span></div>
+            </div>
+            <div>
+              <label class="block mb-1 text-2xs text-ink-muted dark:text-on-dark-soft">{{ t('focus.longBreakLabel') }}</label>
+              <div class="flex items-center gap-2"><input type="number" min="1" max="60" v-model.number="longBreakMinutes" class="input" /><span class="text-2xs text-ink-soft dark:text-on-dark-soft/70">{{ t('focus.minutes') }}</span></div>
+            </div>
           </div>
         </div>
         <div>
@@ -104,6 +129,22 @@
         </div>
       </template>
     </div>
+
+    <!-- Optional break, offered right after the journal step — a plain local countdown,
+         never touches focusStore/session data, so it's never logged as a task or session. -->
+    <div v-if="breakOffer && !breakRunning" class="max-w-lg mx-auto card animate-in space-y-4 text-center">
+      <h2 class="font-display text-lg text-ink dark:text-on-dark">{{ t('focus.breakOfferTitle') }}</h2>
+      <div class="flex justify-center gap-3">
+        <button @click="startBreak(shortBreakMinutes)" class="btn-outline flex-1">{{ t('focus.shortBreakBtn', { minutes: shortBreakMinutes }) }}</button>
+        <button @click="startBreak(longBreakMinutes)" class="btn-primary flex-1">{{ t('focus.longBreakBtn', { minutes: longBreakMinutes }) }}</button>
+      </div>
+      <button @click="finishToDashboard" class="text-xs text-ink-soft dark:text-on-dark-soft/70 hover:underline">{{ t('focus.skipBreak') }}</button>
+    </div>
+    <div v-if="breakRunning" class="max-w-lg mx-auto card animate-in space-y-4 text-center">
+      <h2 class="font-display text-lg text-ink dark:text-on-dark">{{ t('focus.onBreak') }}</h2>
+      <p class="font-mono text-5xl font-normal tabular-nums text-ink dark:text-on-dark tracking-tight">{{ breakDisplayTime }}</p>
+      <button @click="finishToDashboard" class="btn-ghost">{{ t('focus.endBreakEarly') }}</button>
+    </div>
   </div>
 </template>
 
@@ -136,6 +177,42 @@ const recentSessions = ref<any[]>([])
 const saveError = ref('')
 const saving = ref(false)
 
+// Custom duration (in addition to the 15/25/45 presets).
+const useCustomDuration = ref(false)
+const customMinutes = ref(30)
+function selectPreset(seconds: number) { useCustomDuration.value = false; selectedDuration.value = seconds }
+const effectiveDuration = computed(() => useCustomDuration.value ? Math.max(1, customMinutes.value || 1) * 60 : selectedDuration.value)
+
+// Short/long break — a separate, local-only countdown offered after the journal step.
+// It never calls focusStore.start()/saveSession(), so it never creates a focus_sessions
+// row and never counts toward "today's tasks" or the weekly charts.
+const breaksEnabled = ref(false)
+const shortBreakMinutes = ref(5)
+const longBreakMinutes = ref(15)
+const breakOffer = ref(false)
+const breakRunning = ref(false)
+const breakRemaining = ref(0)
+let breakInterval: ReturnType<typeof setInterval> | null = null
+const breakDisplayTime = computed(() => {
+  const m = Math.floor(breakRemaining.value / 60)
+  const s = breakRemaining.value % 60
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+})
+function startBreak(minutes: number) {
+  breakOffer.value = false; breakRunning.value = true
+  breakRemaining.value = minutes * 60
+  breakInterval = setInterval(() => {
+    breakRemaining.value--
+    if (breakRemaining.value <= 0) finishToDashboard()
+  }, 1000)
+}
+function finishToDashboard() {
+  if (breakInterval) { clearInterval(breakInterval); breakInterval = null }
+  breakOffer.value = false; breakRunning.value = false
+  navigateTo('/dashboard')
+}
+onUnmounted(() => { if (breakInterval) clearInterval(breakInterval) })
+
 // null = not answered yet (only relevant when a task is linked); 'no' = still working on
 // it, only the session gets a feelings prompt; 'yes' = also collect a task review and mark
 // the task completed on save.
@@ -165,7 +242,7 @@ function startSession() {
   ambient.stopPreview() // tránh preview + nhạc phiên phát chồng khi bấm Begin ngay sau khi nghe thử
   const title = selectedTaskId.value ? (taskStore.tasks.find(t2 => t2.id === selectedTaskId.value)?.title ?? undefined) : undefined
   taskDoneAnswer.value = null; taskReviewText.value = '' // clear any leftover state from a previous session
-  focusStore.start(selectedDuration.value, selectedTaskId.value ?? undefined, selectedAmbient.value ?? undefined, title)
+  focusStore.start(effectiveDuration.value, selectedTaskId.value ?? undefined, selectedAmbient.value ?? undefined, title)
 }
 function confirmEnd() { focusStore.endEarly() }
 
@@ -190,7 +267,15 @@ async function saveJournal() {
     saving.value = false
     return
   }
-  navigateTo('/dashboard')
+  saving.value = false
+  goToDashboardOrBreak()
 }
-function skipJournal() { taskDoneAnswer.value = null; taskReviewText.value = ''; focusStore.reset(); navigateTo('/dashboard') }
+function skipJournal() { taskDoneAnswer.value = null; taskReviewText.value = ''; focusStore.reset(); goToDashboardOrBreak() }
+
+// Offer a break instead of navigating straight to the dashboard, but only if the
+// user opted into breaks for this session (checkbox on the idle/setup screen).
+function goToDashboardOrBreak() {
+  if (breaksEnabled.value) breakOffer.value = true
+  else navigateTo('/dashboard')
+}
 </script>

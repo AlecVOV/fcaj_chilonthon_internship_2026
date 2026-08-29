@@ -55,8 +55,8 @@
           <h2 class="font-display text-lg text-ink dark:text-on-dark">{{ t('dashboard.todaysTasks') }}</h2>
           <NuxtLink to="/tasks" class="link text-sm">{{ t('dashboard.viewAll') }}</NuxtLink>
         </div>
-        <TaskList :tasks="taskStore.inProgressTasks.slice(0, 5)" @toggle="taskStore.requestToggle" />
-        <p v-if="taskStore.inProgressTasks.length === 0" class="py-8 text-center text-sm text-ink-soft dark:text-on-dark-soft/70">{{ t('dashboard.noInProgressTasks') }}</p>
+        <TaskList :tasks="todaysTasksWidget" @toggle="taskStore.requestToggle" />
+        <p v-if="todaysTasksWidget.length === 0" class="py-8 text-center text-sm text-ink-soft dark:text-on-dark-soft/70">{{ t('dashboard.noActiveTasks') }}</p>
       </div>
       <div class="card"><FocusTimer /></div>
     </div>
@@ -71,15 +71,9 @@
           <button @click="weekOffset = Math.max(0, weekOffset - 1)" :disabled="weekOffset === 0" class="btn-ghost px-2 py-1 disabled:cursor-not-allowed disabled:opacity-30" :title="t('dashboard.nextWeek')">→</button>
         </div>
       </div>
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="card">
-          <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.focusTimeChartTitle') }}</h3>
-          <ChartBars :data="focusWeek" color="#cc785c" unit="m" />
-        </div>
-        <div class="card">
-          <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.tasksCompletedChartTitle') }}</h3>
-          <ChartBars :data="completedWeek" color="#5db872" />
-        </div>
+      <div class="card">
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.weeklyLineChartTitle') }}</h3>
+        <ChartLine :series="weeklyLineSeries" />
       </div>
     </div>
 
@@ -119,6 +113,14 @@ const taskInput = ref<HTMLInputElement>()
 const greeting = computed(() => { const h = new Date().getHours(); if (h < 12) return 'morning'; if (h < 17) return 'afternoon'; return 'evening' })
 const name = computed(() => currentUser.value?.name || currentUser.value?.email?.split('@')[0] || 'there')
 
+// In-progress first (actively being worked on), then pending — each group sorted by
+// priority desc — so the widget surfaces everything actionable today, not just
+// in-progress (a pending task used to be invisible here until manually moved).
+const todaysTasksWidget = computed(() => [
+  ...[...taskStore.inProgressTasks].sort((a, b) => (b.priority || 0) - (a.priority || 0)),
+  ...[...taskStore.pendingTasks].sort((a, b) => (b.priority || 0) - (a.priority || 0)),
+].slice(0, 5))
+
 const todayMinutes = ref(0)
 const sessionsToday = ref(0)
 const streak = ref(0)
@@ -151,6 +153,10 @@ const completedWeek = computed(() => weekDays.value.map((d) => {
     : `${d.format('ddd, MMM D')} · 0`
   return { label: d.format('dd'), value: done.length, title }
 }))
+const weeklyLineSeries = computed(() => [
+  { label: t('dashboard.focusTimeChartTitle'), color: '#cc785c', points: focusWeek.value },
+  { label: t('dashboard.tasksCompletedChartTitle'), color: '#5db872', points: completedWeek.value },
+])
 const statusData = computed(() => [
   { label: t('dashboard.statusPending'), value: taskStore.pendingTasks.length, color: '#8e8b82' },
   { label: t('dashboard.statusInProgress'), value: taskStore.inProgressTasks.length, color: '#d4a017' },

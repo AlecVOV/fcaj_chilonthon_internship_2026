@@ -18,6 +18,7 @@ export interface Task {
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
   priority: number; durationSpent: number; dueDate?: string; review?: string
   completedAt?: string  // set once when completed; stable for daily mapping
+  sortOrder: number     // user-defined drag-and-drop order within the active list
   createdAt: string; updatedAt: string; isSynced: boolean
 }
 
@@ -50,7 +51,7 @@ function rowToTask(r: any): Task {
     id: r.id, userId: r.user_id, title: r.title, description: r.description ?? undefined,
     status: r.status, priority: r.priority ?? 0, durationSpent: r.duration_spent ?? 0,
     dueDate: r.due_date ?? undefined, review: r.review ?? undefined,
-    completedAt: r.completed_at ?? undefined,
+    completedAt: r.completed_at ?? undefined, sortOrder: r.sort_order ?? 0,
     createdAt: r.created_at, updatedAt: r.updated_at, isSynced: true,
   }
 }

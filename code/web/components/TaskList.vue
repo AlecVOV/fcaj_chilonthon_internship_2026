@@ -33,7 +33,7 @@
           >
             {{ task.title }}
           </p>
-          <p v-if="task.description" class="mt-0.5 text-xs text-ink-muted dark:text-on-dark-soft line-clamp-1">
+          <p v-if="task.description" class="mt-0.5 text-xs text-ink-muted dark:text-on-dark-soft whitespace-pre-wrap">
             {{ task.description }}
           </p>
         </div>

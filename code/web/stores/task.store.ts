@@ -17,7 +17,7 @@ function rowToTask(r: any): Task {
     id: r.id, userId: r.user_id, title: r.title, description: r.description ?? undefined,
     status: r.status, priority: r.priority ?? 0, durationSpent: r.duration_spent ?? 0,
     dueDate: r.due_date ?? undefined, review: r.review ?? undefined,
-    completedAt: r.completed_at ?? undefined,
+    completedAt: r.completed_at ?? undefined, sortOrder: r.sort_order ?? 0,
     createdAt: r.created_at, updatedAt: r.updated_at, isSynced: true,
   }
 }
@@ -33,6 +33,7 @@ function taskToRow(t: Partial<Task>): Record<string, unknown> {
   if (t.dueDate !== undefined) row.due_date = t.dueDate ?? null
   if (t.review !== undefined) row.review = t.review ?? null
   if (t.completedAt !== undefined) row.completed_at = t.completedAt ?? null
+  if (t.sortOrder !== undefined) row.sort_order = t.sortOrder
   return row
 }
 
@@ -71,7 +72,7 @@ export const useTaskStore = defineStore('task', () => {
 
   function sortTasks() {
     const order: Record<string, number> = { pending: 0, in_progress: 1, completed: 2, cancelled: 3 }
-    tasks.value.sort((a, b) => (order[a.status] ?? 0) - (order[b.status] ?? 0))
+    tasks.value.sort((a, b) => (order[a.status] ?? 0) - (order[b.status] ?? 0) || a.sortOrder - b.sortOrder)
   }
 
   async function fetchTasks() {
@@ -99,10 +100,13 @@ export const useTaskStore = defineStore('task', () => {
     const userStore = useUserStore()
     if (!userStore.userId) return
     const now = new Date().toISOString()
+    // New tasks sort first by default (lower sort_order = earlier), consistent with the
+    // previous "newest first" ordering, until the user drags to reorder manually.
+    const minOrder = tasks.value.reduce((m, t) => Math.min(m, t.sortOrder), 0)
     const task: Task = {
       id: crypto.randomUUID(), userId: userStore.userId, title, description,
       status: opts?.status ?? 'pending', priority: opts?.priority ?? 0, durationSpent: 0,
-      dueDate: opts?.dueDate || undefined,
+      dueDate: opts?.dueDate || undefined, sortOrder: minOrder - 1,
       createdAt: now, updatedAt: now, isSynced: true,
     }
     const sb = getSupabase()
@@ -173,6 +177,23 @@ export const useTaskStore = defineStore('task', () => {
     if (idx >= 0) tasks.value[idx] = { ...task, ...changes, updatedAt: new Date().toISOString() }
   }
 
+  /**
+   * Persist a new drag-and-drop order for the given task IDs (assigns sort_order =
+   * array index). Updates the local list optimistically, then writes each changed
+   * row to Supabase. Only pass the IDs of the list actually being reordered (e.g.
+   * the merged Active list) — other tasks' sort_order is left untouched.
+   */
+  async function reorderTasks(orderedIds: string[]) {
+    const changed: { id: string; sortOrder: number }[] = []
+    orderedIds.forEach((id, index) => {
+      const task = tasks.value.find(t => t.id === id)
+      if (task && task.sortOrder !== index) { task.sortOrder = index; changed.push({ id, sortOrder: index }) }
+    })
+    if (changed.length === 0) return
+    const sb = getSupabase()
+    await Promise.all(changed.map(c => sb.from('tasks').update({ sort_order: c.sortOrder }).eq('id', c.id)))
+  }
+
   async function deleteTask(taskId: string) {
     // Can't delete a task while its focus session is still active (would break the
     // session's task_id reference and lose the session on save).
@@ -188,7 +209,7 @@ export const useTaskStore = defineStore('task', () => {
     reviewTarget, reviewText, reviewSaving,
     pendingTasks, inProgressTasks, completedTasks, completedToday, totalToday,
     isLockedByFocus,
-    fetchTasks, addTask, toggleTask, updateTask, deleteTask,
+    fetchTasks, addTask, toggleTask, updateTask, deleteTask, reorderTasks,
     requestToggle, saveReview, skipReview, cancelReview,
   }
 })

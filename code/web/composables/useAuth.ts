@@ -104,6 +104,9 @@ export function useAuth() {
       }
       currentUser.value = u
       persistSession()
+      // One-shot flag — layouts/default.vue shows the guide reminder dialog once right
+      // after a fresh sign-in (not on every page load / restored session via syncSession).
+      if (!import.meta.server) { try { sessionStorage.setItem('focus_show_guide_dialog', '1') } catch { /* ignore */ } }
       return u
     } catch (e: any) {
       authError.value = e?.message || t('login.loginFailedFallback')

@@ -42,20 +42,10 @@
 
         <!-- Logged-in user area -->
         <template v-if="authUser">
+          <AnnouncementBell />
           <SyncStatus />
-          <div class="flex items-center gap-2 pl-2 border-l border-hairline dark:border-hairline-dark">
-            <NuxtLink
-              to="/profile"
-              class="text-sm text-ink-muted hidden sm:inline hover:text-ink dark:text-on-dark-soft dark:hover:text-on-dark transition-colors"
-            >
-              {{ authUser?.name ?? authUser?.email?.split('@')[0] ?? 'User' }}
-            </NuxtLink>
-            <button
-              @click="logout"
-              class="rounded-md px-2.5 py-1 text-sm text-ink-muted hover:bg-canvas-card hover:text-error dark:text-on-dark-soft dark:hover:bg-surface-dark-elevated dark:hover:text-error transition-colors"
-            >
-              {{ t('nav.signOut') }}
-            </button>
+          <div class="pl-2 border-l border-hairline dark:border-hairline-dark">
+            <UserMenu />
           </div>
         </template>
 
@@ -92,39 +82,36 @@
 
     <!-- Shared task-completion review prompt (works from any page) -->
     <TaskReviewDialog v-if="authUser" />
+    <GuideReminderDialog v-if="authUser" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { useAuth } from '~/composables/useAuth'
 
-const { currentUser: authUser, isAdmin, logout } = useAuth()
+const { currentUser: authUser, isAdmin } = useAuth()
 const { t } = useLocale()
 
-// User nav links — admin sees only admin links
+// User nav links — admin sees only admin links. Profile (and Notes) now live in the
+// UserMenu avatar dropdown at the top-right corner instead of the main nav, and Focus
+// / Tasks dropped from the top-level list since Dashboard already surfaces both
+// ("Start Focus Session" button + "Today's Tasks" widget with a "View all" link).
 const navItems = computed(() => {
   if (isAdmin.value) {
     return [
       { to: '/admin', label: t('nav.overview') },
       { to: '/admin/users', label: t('nav.users') },
       { to: '/admin/media', label: t('nav.media') },
-      { to: '/profile', label: t('nav.profile') },
     ]
   }
   return [
     { to: '/dashboard', label: t('nav.dashboard') },
-    { to: '/focus', label: t('nav.focus') },
-    { to: '/tasks', label: t('nav.tasks') },
     { to: '/agent', label: t('nav.agent') },
     { to: '/guide', label: t('nav.guide') },
   ]
 })
 
-// Mobile bottom nav always exposes the account/profile link, since the header
-// username link is hidden below 640px (sm).
-const mobileNavItems = computed(() => {
-  const items = [...navItems.value]
-  if (!items.some(i => i.to === '/profile')) items.push({ to: '/profile', label: 'Profile' })
-  return items
-})
+// Mobile bottom nav mirrors the desktop nav — the UserMenu avatar in the header
+// (always visible, not hidden on small screens) covers Profile/Notes/Sign out.
+const mobileNavItems = navItems
 </script>

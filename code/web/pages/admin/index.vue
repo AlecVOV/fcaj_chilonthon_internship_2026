@@ -11,6 +11,7 @@
       <NuxtLink to="/admin/media" class="tab" :class="$route.path.startsWith('/admin/media') ? 'tab-active' : ''">{{ t('admin.tabMedia') }}</NuxtLink>
       <NuxtLink to="/admin/ambient" class="tab" :class="$route.path.startsWith('/admin/ambient') ? 'tab-active' : ''">{{ t('admin.tabAmbient') }}</NuxtLink>
       <NuxtLink to="/admin/feedback" class="tab" :class="$route.path.startsWith('/admin/feedback') ? 'tab-active' : ''">{{ t('admin.tabFeedback') }}</NuxtLink>
+      <NuxtLink to="/admin/announcements" class="tab" :class="$route.path.startsWith('/admin/announcements') ? 'tab-active' : ''">{{ t('admin.tabAnnouncements') }}</NuxtLink>
     </div>
 
     <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -45,6 +46,14 @@
         </div>
         <h2 class="font-display text-lg text-ink dark:text-on-dark mb-1">{{ t('admin.overview.feedbackTitle') }}</h2>
         <p class="text-sm text-ink-body dark:text-on-dark-soft">{{ t('admin.overview.feedbackDesc') }}</p>
+      </NuxtLink>
+
+      <NuxtLink to="/admin/announcements" class="card group hover:bg-surface-card dark:hover:bg-surface-dark-elevated transition-colors">
+        <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-amber/20 text-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+        </div>
+        <h2 class="font-display text-lg text-ink dark:text-on-dark mb-1">{{ t('admin.overview.announcementsTitle') }}</h2>
+        <p class="text-sm text-ink-body dark:text-on-dark-soft">{{ t('admin.overview.announcementsDesc') }}</p>
       </NuxtLink>
 
       <div class="card">

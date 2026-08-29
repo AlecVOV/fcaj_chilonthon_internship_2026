@@ -10,6 +10,7 @@
       <NuxtLink to="/admin/media" class="tab">{{ t('admin.tabMedia') }}</NuxtLink>
       <NuxtLink to="/admin/ambient" class="tab tab-active">{{ t('admin.tabAmbient') }}</NuxtLink>
       <NuxtLink to="/admin/feedback" class="tab">{{ t('admin.tabFeedback') }}</NuxtLink>
+      <NuxtLink to="/admin/announcements" class="tab">{{ t('admin.tabAnnouncements') }}</NuxtLink>
     </div>
 
     <!-- ════════════ PHẦN 1: S3 FILE MANAGEMENT ════════════ -->

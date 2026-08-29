@@ -14,6 +14,7 @@
       <NuxtLink to="/admin/media" class="tab tab-active">{{ t('admin.tabMedia') }}</NuxtLink>
       <NuxtLink to="/admin/ambient" class="tab">{{ t('admin.tabAmbient') }}</NuxtLink>
       <NuxtLink to="/admin/feedback" class="tab">{{ t('admin.tabFeedback') }}</NuxtLink>
+      <NuxtLink to="/admin/announcements" class="tab">{{ t('admin.tabAnnouncements') }}</NuxtLink>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 mb-6">

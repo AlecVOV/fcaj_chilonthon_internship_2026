@@ -14,7 +14,7 @@ export const en = {
   nav: {
     brand: 'FCAJ Worklog Repository', dashboard: 'Dashboard', focus: 'Focus', tasks: 'Tasks',
     agent: 'Agent', guide: 'Guide', overview: 'Overview', users: 'Users', media: 'Media',
-    profile: 'Profile', signOut: 'Sign out', aboutProduct: 'About the Product',
+    profile: 'Profile', notes: 'Notes', signOut: 'Sign out', aboutProduct: 'About the Product',
     aboutAuthor: 'About the Author', useProduct: 'Use our product',
   },
 
@@ -113,10 +113,11 @@ export const en = {
     mood: 'Mood', fromLastSession: 'from last session',
     startFocusSession: 'Start Focus Session', askAgentForTasks: 'Ask Agent for Tasks',
     newTask: 'New Task', newTaskPlaceholder: 'What do you need to focus on?', addTask: 'Add Task',
-    todaysTasks: "Today's Tasks", viewAll: 'View all', noInProgressTasks: 'No in-progress tasks.',
+    todaysTasks: "Today's Tasks", viewAll: 'View all', noActiveTasks: 'No pending or in-progress tasks.',
     weeklyActivity: 'Weekly activity', previousWeek: 'Previous week', nextWeek: 'Next week',
     thisWeek: 'this week',
-    focusTimeChartTitle: 'Focus time (minute) — hover a bar for sessions',
+    weeklyLineChartTitle: 'Focus minutes & tasks completed — hover a point for details',
+    focusTimeChartTitle: 'Focus time (min)',
     tasksCompletedChartTitle: 'Tasks completed', taskStatusChartTitle: 'Task status',
     openTasksByPriorityChartTitle: 'Open tasks by priority',
     statusPending: 'Pending', statusInProgress: 'In Progress', statusCompleted: 'Completed',
@@ -139,7 +140,8 @@ export const en = {
     deleteTaskTitle: 'Delete Task', deleteConfirm: "Delete {title}? This can't be undone.",
     deleting: 'Deleting', lockedTooltip: 'Locked — this task is in an active focus session',
     markPending: 'Mark as pending', markComplete: 'Mark as complete',
-    tabPending: 'Pending', tabInProgress: 'In Progress', tabCompleted: 'Completed',
+    tabActive: 'Active', tabPending: 'Pending', tabInProgress: 'In Progress', tabCompleted: 'Completed',
+    completionRate: '{pct}% complete — {done} of {total} tasks',
     titleRequired: 'Title is required.', saveFailed: 'Failed to save changes.',
     addFailed: 'Failed to add task. Please try again.', deleteFailed: 'Failed to delete task.',
     loadFailed: "Couldn't load your tasks. Check your connection and try again.",
@@ -163,6 +165,13 @@ export const en = {
     recommendedContent: 'Recommended Content', skip: 'Skip', saveAndFinish: 'Save & Finish',
     saving: 'Saving...', saveFailedFallback: "Couldn't save the session. Check your connection and try again.",
     statusRunning: 'running', statusPaused: 'paused',
+    customDuration: 'Custom', minutes: 'minutes',
+    enableBreaks: 'Offer a break after this session',
+    shortBreakLabel: 'Short break', longBreakLabel: 'Long break',
+    breakOfferTitle: 'Nice work! Take a break?',
+    shortBreakBtn: 'Short break ({minutes}m)', longBreakBtn: 'Long break ({minutes}m)',
+    skipBreak: "Skip — I'm done for now",
+    onBreak: 'On a break', endBreakEarly: 'End break',
   },
 
   agent: {
@@ -211,23 +220,31 @@ export const en = {
   guide: {
     heading: 'User Guide', subheading: 'A quick tour of every feature in FCAJ Worklog Repository.',
     s1Title: '1. Dashboard', s1Tagline: 'Your daily snapshot.',
-    s1P1: "Shows today's total focus time, sessions, and task completion at a glance.",
-    s1P2: 'Charts break down focus time by hour and by mood, so you can spot your best working hours.',
+    s1P1: "Shows today's total focus time, sessions, tasks done, and mood at a glance. <strong>Today's Tasks</strong> lists both pending and in-progress tasks now — you no longer need to start a task first just to see it here.",
+    s1P2: '<strong>Weekly activity</strong> plots focus minutes and tasks completed on one chart so you can compare the two at a glance; use the arrows above it to browse previous weeks. Below that, Task Status and Open Tasks by Priority give a snapshot of where things stand right now.',
     s2Title: '2. Focus', s2Tagline: 'Run a timed deep-work session.',
-    s2P1: 'Pick a task (optional), set a duration, and start the timer.',
+    s2P1: 'Pick a task (optional — only in-progress tasks can be linked), choose a duration — 15/25/45 minutes or tap <strong>Custom</strong> for any length — and start the timer.',
     s2P2: 'Choose an ambient sound track — it keeps playing even if you switch to another page while the session runs.',
-    s2P3: 'At the end of a session you can log your mood and a short journal entry.',
+    s2P3: 'Turn on <strong>Offer a break</strong> before starting to get a short or long break timer right after you log the session. Breaks are never saved to your worklog — they\'re just a countdown, nothing more.',
+    s2P4: 'At the end of a session you can log your mood and a short journal entry.',
     s3Title: '3. Tasks', s3Tagline: "Plan and track what you're working on.",
     s3P1: 'Create tasks manually, or use the <strong>Task Assistant</strong> on the Agent page — describe what you need to do in plain language and it will create tasks for you, asking clarifying questions like priority when needed.',
-    s3P2: 'Mark tasks as in progress or completed; completed tasks show up in your Worklog History.',
+    s3P2: 'The <strong>Active</strong> tab merges pending and in-progress tasks into one list — tick the checkbox on any of them to mark it complete directly, no need to move a task to "In Progress" first just to finish it. Priority shows as a colored badge next to the title, and a progress bar at the top tracks your overall completion rate.',
+    s3P3: 'Drag a row to reorder your Active list — the new order is saved automatically. Completed tasks move to their own tab and show up in your Worklog History.',
     s4Title: '4. Agent', s4Tagline: 'Chat with your AI task assistant.',
     s4P1: 'Ask it to create, update, or organize tasks — it can also just answer questions about your workload.',
     s4P2: 'Conversations are saved, so you can pick up a previous chat from the sidebar.',
     s4P3: 'Bulk actions (e.g. "clear all pending tasks and add these 5 new ones") may take longer to process — if you see a "Service Unavailable" message, it usually means the request took too long; try splitting it into smaller requests.',
-    s5Title: '5. Profile & Worklog History', s5Tagline: 'Manage your account and export your work.',
-    s5P1: "Edit your name or email — email changes apply immediately (it's also your login).",
+    s5Title: '7. Profile & Worklog History', s5Tagline: 'Manage your account and export your work.',
+    s5P1: 'Open the avatar icon in the top-right corner → <strong>Profile</strong> (same menu as Notes and Sign out). Edit your name or email — email changes apply immediately (it\'s also your login).',
     s5P2: 'Worklog History lists each day you\'ve worked; click <strong>Report</strong> to download a Markdown summary for that day (focus time, tasks, mood, journal entries).',
     s5P3: 'Send feedback about the app directly from this page — the team reads every submission.',
+    s6Title: '5. Notes', s6Tagline: 'A personal notepad, Markdown-friendly.',
+    s6P1: 'Open the avatar icon in the top-right corner → <strong>Notes</strong>. Write anything — headings, lists, <strong>bold</strong>, `code` — Markdown is supported.',
+    s6P2: 'Press <strong>Save</strong> and the page switches to a rendered preview; press <strong>Edit</strong> to go back to writing. There\'s one note per account, so this is a single running scratchpad rather than a list of separate notes.',
+    s7Title: '6. Announcements', s7Tagline: "What's new, without digging through release notes.",
+    s7P1: 'The bell icon in the header shows updates the team has posted about new features or changes.',
+    s7P2: 'A red badge means there\'s something you haven\'t seen yet — click the bell to read it, the badge clears automatically.',
     flowTitle: 'Flow: creating and finishing a task',
     flowTagline: 'Two ways to get from an idea to a logged, reflected-on session.',
     flowManualTitle: 'Manual',
@@ -248,6 +265,7 @@ export const en = {
 
   admin: {
     tabOverview: 'Overview', tabUsers: 'Users', tabMedia: 'Media', tabAmbient: 'Ambient', tabFeedback: 'Feedback',
+    tabAnnouncements: 'Announcements',
 
     overview: {
       adminPanelTitle: 'Admin Panel', adminPanelSubtitle: 'System management & analytics',
@@ -259,6 +277,8 @@ export const en = {
       ambientDesc: 'Upload background music to S3 & manage the track list shown to users.',
       feedbackTitle: 'Feedback',
       feedbackDesc: 'Read what users are saying about the app and mark items as resolved.',
+      announcementsTitle: 'Announcements',
+      announcementsDesc: 'Post updates about new features — shown to every user via the bell icon.',
       newBadge: '{n} new',
       systemHealthTitle: 'System Health',
       systemHealthDesc: 'API Gateway status, Lambda invocations, Supabase connection monitor.',
@@ -330,6 +350,12 @@ export const en = {
       deleteFailedFlash: 'Delete failed', loadSoundsFailedFlash: 'Could not load the list',
     },
 
+    announcements: {
+      title: 'Admin Announcements', newAction: 'New Announcement',
+      titleLabel: 'Title', titlePlaceholder: 'E.g. New feature: RAG recommendations',
+      messageLabel: 'Message', messagePlaceholder: 'Describe what changed or what’s new',
+    },
+
     feedback: {
       title: 'Admin Feedback',
       migrationHint: 'Usually because migration <code>00017_feedback.sql</code> has not been run yet.',
@@ -349,6 +375,22 @@ export const en = {
   },
 
   taskList: { empty: 'No tasks yet.', lockedTooltip: 'Locked — this task is in an active focus session' },
+
+  announcements: {
+    title: "What's new", empty: 'No announcements yet.',
+  },
+
+  notes: {
+    title: 'Notes', lastSaved: 'Last saved {date}',
+    previewBtn: 'Preview', editBtn: 'Edit',
+    placeholder: 'Write anything — supports Markdown (headings, lists, **bold**, `code`)…',
+    loadFailed: "Couldn't load your notes.", saveFailed: "Couldn't save your notes.",
+  },
+
+  guideDialog: {
+    title: 'New here?', body: 'Take a quick tour of every feature before you dive in.',
+    dismiss: 'Maybe later', open: 'Open the guide',
+  },
 
   ambientPlayer: {
     heading: 'Ambient Sound', silence: 'Silence', loading: 'Loading ambient sounds…',

@@ -57,15 +57,23 @@ const sections = computed(() => [
   },
   {
     title: t('guide.s2Title'), tagline: t('guide.s2Tagline'),
-    points: [t('guide.s2P1'), t('guide.s2P2'), t('guide.s2P3')],
+    points: [t('guide.s2P1'), t('guide.s2P2'), t('guide.s2P3'), t('guide.s2P4')],
   },
   {
     title: t('guide.s3Title'), tagline: t('guide.s3Tagline'),
-    points: [t('guide.s3P1'), t('guide.s3P2')],
+    points: [t('guide.s3P1'), t('guide.s3P2'), t('guide.s3P3')],
   },
   {
     title: t('guide.s4Title'), tagline: t('guide.s4Tagline'),
     points: [t('guide.s4P1'), t('guide.s4P2'), t('guide.s4P3')],
+  },
+  {
+    title: t('guide.s6Title'), tagline: t('guide.s6Tagline'),
+    points: [t('guide.s6P1'), t('guide.s6P2')],
+  },
+  {
+    title: t('guide.s7Title'), tagline: t('guide.s7Tagline'),
+    points: [t('guide.s7P1'), t('guide.s7P2')],
   },
   {
     title: t('guide.s5Title'), tagline: t('guide.s5Tagline'),
