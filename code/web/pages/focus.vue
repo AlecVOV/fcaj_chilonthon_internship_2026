@@ -65,22 +65,44 @@
       </div>
     </div>
 
-    <div v-if="focusStore.isRunning || focusStore.isPaused" class="max-w-lg mx-auto space-y-6">
-      <div class="h-2 rounded-full bg-hairline dark:bg-hairline-dark overflow-hidden">
-        <div class="h-full rounded-full bg-primary transition-all duration-1000" :style="{ width: `${focusStore.progress * 100}%` }" />
+    <div v-if="focusStore.isRunning || focusStore.isPaused">
+      <!-- Immersive: dims/hides everything else so the timer is the only thing on screen. -->
+      <div v-if="immersive" class="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-8 bg-ink px-6 text-center animate-in">
+        <button @click="immersive = false" class="absolute right-5 top-5 text-sm text-on-dark-soft hover:text-on-dark">{{ t('focus.exitImmersive') }} ✕</button>
+        <div class="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-white/10">
+          <div class="h-full rounded-full bg-primary transition-all duration-1000" :style="{ width: `${focusStore.progress * 100}%` }" />
+        </div>
+        <p class="font-mono text-7xl sm:text-8xl font-normal tabular-nums text-on-dark tracking-tight">{{ focusStore.displayTime }}</p>
+        <p class="text-xs uppercase tracking-wider text-on-dark-soft">{{ focusStore.isPaused ? t('focus.statusPaused') : t('focus.statusRunning') }}</p>
+        <p class="text-sm text-on-dark-soft">{{ focusStore.taskTitle || t('focus.taskNone') }}</p>
+        <div class="flex justify-center gap-3">
+          <button v-if="focusStore.isRunning" @click="focusStore.pause()" class="rounded-md border border-white/20 px-4 py-2 text-sm text-on-dark hover:bg-white/10 transition-colors">{{ t('focus.pause') }}</button>
+          <button v-if="focusStore.isPaused" @click="focusStore.resume()" class="btn-primary">{{ t('focus.resume') }}</button>
+          <button @click="confirmEnd" class="btn-danger">{{ t('focus.endSession') }}</button>
+        </div>
       </div>
-      <div class="text-center">
-        <p class="font-mono text-6xl font-normal tabular-nums text-ink dark:text-on-dark tracking-tight">{{ focusStore.displayTime }}</p>
-        <p class="mt-2 text-xs uppercase tracking-wider text-ink-soft dark:text-on-dark-soft">{{ focusStore.isPaused ? t('focus.statusPaused') : t('focus.statusRunning') }}</p>
-      </div>
-      <div class="flex justify-center gap-3">
-        <button v-if="focusStore.isRunning" @click="focusStore.pause()" class="btn-outline">{{ t('focus.pause') }}</button>
-        <button v-if="focusStore.isPaused" @click="focusStore.resume()" class="btn-primary">{{ t('focus.resume') }}</button>
-        <button @click="confirmEnd" class="btn-danger">{{ t('focus.endSession') }}</button>
-      </div>
-      <div class="card text-sm space-y-3">
-        <p class="text-ink-body dark:text-on-dark-soft"><span class="font-medium text-ink dark:text-on-dark">{{ t('focus.taskLabel') }}</span> {{ focusStore.taskTitle || t('focus.taskNone') }}</p>
-        <AmbientPlayer :model-value="focusStore.ambientTrack" @update:model-value="focusStore.ambientTrack = $event" />
+
+      <!-- Normal inline view -->
+      <div v-else class="max-w-lg mx-auto space-y-6">
+        <div class="flex justify-end">
+          <button @click="immersive = true" class="text-xs text-ink-soft dark:text-on-dark-soft/70 hover:underline">{{ t('focus.enterImmersive') }}</button>
+        </div>
+        <div class="h-2 rounded-full bg-hairline dark:bg-hairline-dark overflow-hidden">
+          <div class="h-full rounded-full bg-primary transition-all duration-1000" :style="{ width: `${focusStore.progress * 100}%` }" />
+        </div>
+        <div class="text-center">
+          <p class="font-mono text-6xl font-normal tabular-nums text-ink dark:text-on-dark tracking-tight">{{ focusStore.displayTime }}</p>
+          <p class="mt-2 text-xs uppercase tracking-wider text-ink-soft dark:text-on-dark-soft">{{ focusStore.isPaused ? t('focus.statusPaused') : t('focus.statusRunning') }}</p>
+        </div>
+        <div class="flex justify-center gap-3">
+          <button v-if="focusStore.isRunning" @click="focusStore.pause()" class="btn-outline">{{ t('focus.pause') }}</button>
+          <button v-if="focusStore.isPaused" @click="focusStore.resume()" class="btn-primary">{{ t('focus.resume') }}</button>
+          <button @click="confirmEnd" class="btn-danger">{{ t('focus.endSession') }}</button>
+        </div>
+        <div class="card text-sm space-y-3">
+          <p class="text-ink-body dark:text-on-dark-soft"><span class="font-medium text-ink dark:text-on-dark">{{ t('focus.taskLabel') }}</span> {{ focusStore.taskTitle || t('focus.taskNone') }}</p>
+          <AmbientPlayer :model-value="focusStore.ambientTrack" @update:model-value="focusStore.ambientTrack = $event" />
+        </div>
       </div>
     </div>
 
@@ -118,7 +140,8 @@
         <div v-if="recommendations.length > 0" class="rounded-md border border-hairline dark:border-hairline-dark p-3 space-y-2">
           <p class="text-xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('focus.recommendedContent') }}</p>
           <div v-for="rec in recommendations" :key="rec.id" class="text-sm">
-            <p class="font-medium text-ink dark:text-on-dark">{{ rec.title }}</p>
+            <a v-if="rec.content_url" :href="rec.content_url" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline">{{ rec.title }} ↗</a>
+            <p v-else class="font-medium text-ink dark:text-on-dark">{{ rec.title }}</p>
             <p class="text-xs text-ink-soft dark:text-on-dark-soft">{{ rec.source }} &middot; {{ rec.type }}</p>
           </div>
         </div>
@@ -226,6 +249,13 @@ const saveDisabled = computed(() => {
 
 const durations = [{ label: '15m', seconds: 15 * 60 }, { label: '25m', seconds: 25 * 60 }, { label: '45m', seconds: 45 * 60 }]
 
+// Immersive mode — dims/hides the rest of the app so the timer is the only thing visible.
+// Off by default each session; Escape exits it (same as the ✕ button).
+const immersive = ref(false)
+function handleEscape(e: KeyboardEvent) { if (e.key === 'Escape' && immersive.value) immersive.value = false }
+onMounted(() => document.addEventListener('keydown', handleEscape))
+onUnmounted(() => document.removeEventListener('keydown', handleEscape))
+
 // Ambient audio follows the timer lifecycle -- xử lý ở app.vue (luôn mount, sống qua
 // điều hướng trang) chứ KHÔNG ở đây, để nhạc không bị dừng khi rời trang Focus sang
 // dashboard/tasks/agent giữa phiên đang chạy. app.vue cũng theo dõi luôn
@@ -241,7 +271,7 @@ onMounted(async () => {
 function startSession() {
   ambient.stopPreview() // tránh preview + nhạc phiên phát chồng khi bấm Begin ngay sau khi nghe thử
   const title = selectedTaskId.value ? (taskStore.tasks.find(t2 => t2.id === selectedTaskId.value)?.title ?? undefined) : undefined
-  taskDoneAnswer.value = null; taskReviewText.value = '' // clear any leftover state from a previous session
+  taskDoneAnswer.value = null; taskReviewText.value = ''; immersive.value = false // clear any leftover state from a previous session
   focusStore.start(effectiveDuration.value, selectedTaskId.value ?? undefined, selectedAmbient.value ?? undefined, title)
 }
 function confirmEnd() { focusStore.endEarly() }

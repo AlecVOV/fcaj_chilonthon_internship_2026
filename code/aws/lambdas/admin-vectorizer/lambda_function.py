@@ -21,23 +21,38 @@ PostgREST tu verify (moi thuat toan, ke ca ES256) qua
 GET /rest/v1/users?id=eq.{sub}&select=id,role -- role phai la 'admin'.
 
 Sau khi authorize, Lambda GOI LAI PostgREST BANG CHINH TOKEN CUA CALLER (khong dung
-service_role) de doc/ghi media_library -- RLS (`media_read_all`, `media_write_admin`/
-`media_update_admin`, deu dua vao is_admin()) la lop kiem tra THU HAI doc lap; Lambda
-KHONG can SUPABASE_SERVICE_ROLE_KEY nen giam be mat secret.
+service_role) de doc/ghi media_library/media_chunks -- RLS (`media_read_all`,
+`media_chunks_write_admin`/`media_chunks_update_admin`, deu dua vao is_admin()) la lop
+kiem tra THU HAI doc lap; Lambda KHONG can SUPABASE_SERVICE_ROLE_KEY nen giam be mat secret.
+
+CHUNKING (migration 00022_media_chunks.sql): Bedrock Cohere embed CHAN CUNG o 2048 ky
+tu/text -- noi dung dai (bai giang/transcript nhieu doan) truoc day bi CAT CUT o
+MAX_INPUT_CHARS=2000, phan sau content_text vo hinh voi RAG. Tu ban nay, moi item duoc
+CHIA THANH NHIEU CHUNK (<=CHUNK_CHARS ky tu/chunk, overlap CHUNK_OVERLAP ky tu de giu
+ngu canh qua ranh gioi) roi TUNG CHUNK duoc embed rieng va ghi vao bang media_chunks
+(khong con ghi media_library.embedding_vector nua -- cot do coi nhu deprecated, giu lai
+trong schema nhung khong con Lambda nao dung). search_similar_content() (RPC, dinh nghia
+trong 00022) tim tren media_chunks roi gop lai theo media_id truoc khi tra ve.
 
 Route:
-  POST /embed      { "mediaId": "<uuid>" }   -> embed 1 item, tra {mediaId, dimensions}
-  POST /embed-all   {}                        -> embed MOI item con embedding_vector NULL
-                                                   trong 1 lan goi Cohere (batch, texts la
-                                                   list) roi ghi tung dong, tra {count: N}
+  POST /embed      { "mediaId": "<uuid>" }   -> chunk + embed 1 item, tra {mediaId, chunks, dimensions}
+  POST /embed-all   {}                        -> chunk + embed MOI item CHUA CO row nao
+                                                   trong media_chunks, gom nhieu item vao
+                                                   1 lan goi Cohere (toi da MAX_TEXTS_PER_CALL
+                                                   text/lan -- item du khong het se tu
+                                                   duoc xu ly o lan goi /embed-all ke tiep,
+                                                   "resumable" tu nhien), tra {count: N}
+                                                   (N = so MEDIA ITEM da (re-)chunk, khong
+                                                   phai so chunk).
 
 Input embed = title + content_text (ghep lai) -- de co ca video/quote thieu
-content_text van co it nhat title de embed (khong bo qua item nao).
+content_text van co it nhat title de embed (khong bo qua item nao). Re-embed 1 item
+(vd sau khi admin sua content_text) se XOA sach chunk cu roi ghi lai tu dau (idempotent).
 
 Env: SUPABASE_URL, SUPABASE_ANON_KEY (bat buoc, dung ca cho auth-check lan doc/ghi
-     media_library), ALLOWED_ORIGINS (CSV, optional), COHERE_MODEL_ID (mac dinh
-     cohere.embed-multilingual-v3), EMBED_DIMENSIONS (mac dinh 1024, PHAI khop
-     VECTOR(1024) trong migration 00015).
+     media_library/media_chunks), ALLOWED_ORIGINS (CSV, optional), COHERE_MODEL_ID (mac
+     dinh cohere.embed-multilingual-v3), EMBED_DIMENSIONS (mac dinh 1024, PHAI khop
+     VECTOR(1024) trong migration 00015/00022).
 """
 
 import base64
@@ -54,12 +69,14 @@ SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', '').split(',') if o.strip()]
 COHERE_MODEL_ID = os.environ.get('COHERE_MODEL_ID', 'cohere.embed-multilingual-v3')
 EMBED_DIMENSIONS = int(os.environ.get('EMBED_DIMENSIONS', '1024'))
-MAX_INPUT_CHARS = 2000  # Bedrock Cohere embed CHAN CUNG o 2048 ky tu/text (verify that: gui
+CHUNK_CHARS = 1800  # Bedrock Cohere embed CHAN CUNG o 2048 ky tu/text (verify that: gui
 # >2048 -> ValidationException, "truncate":"END" KHONG cuu duoc vi day la gioi han request-
-# validation cua Bedrock, khac voi truncate noi bo cua model). Voi noi dung dai (bai giang/
-# transcript nhieu doan), 2000 ky tu dau chi la 1 phan nho -- xem
-# docs/ai-features-roadmap.md muc 5 (KB ingestion) de biet chi tiet + huong xu ly (chunking).
-MAX_BATCH = 50  # /embed-all cap so item xu ly 1 lan (Cohere cho toi 96 texts/call)
+# validation cua Bedrock, khac voi truncate noi bo cua model) -- de margin an toan duoi
+# 2048. Noi dung dai hon CHUNK_CHARS duoc CHIA THANH NHIEU CHUNK (xem _chunk_text) thay vi
+# cat cut nhu truoc -- xem docs/ai-features-roadmap.md muc 5 (KB ingestion).
+CHUNK_OVERLAP = 200  # so ky tu lap lai giua 2 chunk lien tiep, giu ngu canh qua ranh gioi
+MAX_BATCH = 50  # /embed-all cap so MEDIA ITEM xet xu ly 1 lan (truoc khi gop chunk-text)
+MAX_TEXTS_PER_CALL = 90  # tran an toan duoi gioi han 96 texts/call that cua Cohere batch embed
 
 _bedrock = None
 
@@ -188,23 +205,57 @@ def _get_media(token, media_id):
     return rows[0] if rows else None
 
 
-def _list_unembedded(token, limit=MAX_BATCH):
+def _list_active_media(token):
     return _pg_request(
         'GET',
-        f'media_library?embedding_vector=is.null&select=id,title,content_text,type&limit={limit}',
+        'media_library?is_active=eq.true&select=id,title,content_text,type&order=created_at.asc',
         token,
     )
 
 
-def _write_embedding(token, media_id, vec):
-    rows = _pg_request('PATCH', f'media_library?id=eq.{media_id}', token, body={'embedding_vector': _vector_literal(vec)})
-    return bool(rows)  # rong -> RLS chan (khong phai admin) hoac id sai
+def _list_chunked_media_ids(token):
+    """id cua moi media item DA CO it nhat 1 chunk -- dung de tim item con lai chua embed
+    (media_library khong con cot embedding_vector NULL/not-null de loc nua)."""
+    rows = _pg_request('GET', 'media_chunks?select=media_id', token)
+    return {r['media_id'] for r in rows}
 
 
-def _embed_input_text(row):
-    """title + content_text ghep lai -- dam bao video/quote thieu content_text van co it nhat title de embed."""
+def _replace_chunks(token, media_id, chunk_texts, vectors):
+    """Xoa chunk cu (neu co) roi ghi lai toan bo chunk moi cho 1 media item -- dam bao
+    idempotent khi admin bam embed lai (vd sau khi sua content_text)."""
+    _pg_request('DELETE', f'media_chunks?media_id=eq.{media_id}', token)
+    rows = [
+        {'media_id': media_id, 'chunk_index': i, 'content_text': t, 'embedding_vector': _vector_literal(v)}
+        for i, (t, v) in enumerate(zip(chunk_texts, vectors))
+    ]
+    if rows:
+        _pg_request('POST', 'media_chunks', token, body=rows)
+
+
+def _full_input_text(row):
+    """title + content_text ghep lai -- dam bao video/quote thieu content_text van co it
+    nhat title de embed. KHONG con cat cut o day nua -- _chunk_text() lo viec chia nho."""
     parts = [p for p in (row.get('title'), row.get('content_text')) if p]
-    return '\n\n'.join(parts).strip()[:MAX_INPUT_CHARS]
+    return '\n\n'.join(parts).strip()
+
+
+def _chunk_text(text):
+    """Chia text thanh cac chunk <= CHUNK_CHARS ky tu, overlap CHUNK_OVERLAP ky tu de giu
+    ngu canh qua ranh gioi chunk. Text ngan (<= CHUNK_CHARS) tra ve list co dung 1 phan tu."""
+    text = text.strip()
+    if not text:
+        return []
+    if len(text) <= CHUNK_CHARS:
+        return [text]
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(start + CHUNK_CHARS, len(text))
+        chunks.append(text[start:end])
+        if end == len(text):
+            break
+        start = end - CHUNK_OVERLAP
+    return chunks
 
 
 # ── HTTP plumbing ─────────────────────────────────────────────────────────────
@@ -240,18 +291,42 @@ def handler(event, context):
         token = _authorize(event)
 
         if path.endswith('/embed-all'):
-            rows = _list_unembedded(token)
-            if not rows:
+            chunked_ids = _list_chunked_media_ids(token)
+            pending = [r for r in _list_active_media(token) if r['id'] not in chunked_ids][:MAX_BATCH]
+            if not pending:
                 return _resp(200, {'count': 0}, event)
-            texts = [_embed_input_text(r) or (r.get('title') or '') for r in rows]
-            vectors = _embed_texts(texts, input_type='search_document')  # 1 lan goi Cohere cho ca batch
+
+            # Gom chunk-text tu nhieu item vao 1 lan goi Cohere, dung lai khi cham
+            # MAX_TEXTS_PER_CALL -- item con du se tu duoc xu ly o lan goi /embed-all
+            # ke tiep (van chua co chunk nao trong media_chunks nen van "pending").
+            plan = []  # [(media_id, [chunk_text, ...]), ...]
+            total_texts = 0
+            for row in pending:
+                text = _full_input_text(row) or (row.get('title') or '')
+                chunk_texts = _chunk_text(text)[:MAX_TEXTS_PER_CALL]
+                if not chunk_texts:
+                    continue
+                if plan and total_texts + len(chunk_texts) > MAX_TEXTS_PER_CALL:
+                    break
+                plan.append((row['id'], chunk_texts))
+                total_texts += len(chunk_texts)
+
+            if not plan:
+                return _resp(200, {'count': 0}, event)
+
+            flat_texts = [t for _, chunk_texts in plan for t in chunk_texts]
+            vectors = _embed_texts(flat_texts, input_type='search_document')  # 1 lan goi Cohere cho ca batch
+
             count = 0
-            for row, vec in zip(rows, vectors):
+            vi = 0
+            for media_id, chunk_texts in plan:
+                item_vectors = vectors[vi:vi + len(chunk_texts)]
+                vi += len(chunk_texts)
                 try:
-                    if _write_embedding(token, row['id'], vec):
-                        count += 1
+                    _replace_chunks(token, media_id, chunk_texts, item_vectors)
+                    count += 1
                 except Exception as e:  # noqa: BLE001 -- 1 item loi khong duoc chan ca batch
-                    print(f'ERROR embed-all write {row.get("id")}: {e}')
+                    print(f'ERROR embed-all chunk write {media_id}: {e}')
             return _resp(200, {'count': count}, event)
 
         if path.endswith('/embed'):
@@ -265,14 +340,14 @@ def handler(event, context):
             row = _get_media(token, media_id)
             if not row:
                 return _resp(404, {'message': 'Khong tim thay media.'}, event)
-            text = _embed_input_text(row)
-            if not text:
+            text = _full_input_text(row)
+            chunk_texts = _chunk_text(text)[:MAX_TEXTS_PER_CALL]
+            if not chunk_texts:
                 return _resp(400, {'message': 'Media khong co title/content_text de embed.'}, event)
 
-            vec = _embed_texts([text], input_type='search_document')[0]
-            if not _write_embedding(token, media_id, vec):
-                return _resp(403, {'message': 'Ghi that bai (RLS tu choi hoac media khong con ton tai).'}, event)
-            return _resp(200, {'mediaId': media_id, 'dimensions': EMBED_DIMENSIONS}, event)
+            vectors = _embed_texts(chunk_texts, input_type='search_document')
+            _replace_chunks(token, media_id, chunk_texts, vectors)
+            return _resp(200, {'mediaId': media_id, 'chunks': len(chunk_texts), 'dimensions': EMBED_DIMENSIONS}, event)
 
         return _resp(404, {'message': f'Khong khop route: {path}'}, event)
 

@@ -53,11 +53,11 @@ const { t } = useLocale()
 const sections = computed(() => [
   {
     title: t('guide.s1Title'), tagline: t('guide.s1Tagline'),
-    points: [t('guide.s1P1'), t('guide.s1P2')],
+    points: [t('guide.s1P1'), t('guide.s1P2'), t('guide.s1P3')],
   },
   {
     title: t('guide.s2Title'), tagline: t('guide.s2Tagline'),
-    points: [t('guide.s2P1'), t('guide.s2P2'), t('guide.s2P3'), t('guide.s2P4')],
+    points: [t('guide.s2P1'), t('guide.s2P2'), t('guide.s2P3'), t('guide.s2P4'), t('guide.s2P5')],
   },
   {
     title: t('guide.s3Title'), tagline: t('guide.s3Tagline'),

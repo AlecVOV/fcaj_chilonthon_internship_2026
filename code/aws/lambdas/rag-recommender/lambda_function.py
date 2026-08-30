@@ -27,6 +27,14 @@ Route: POST /rag   { "emotion": "stressed", "limit": 3 }
 Tra ve: [ { id, title, content_text, content_url, type, source, similarity }, ... ]
 (mang phang, KHONG boc trong object -- khop dung useRAG.ts hien tai: `response: any[]`)
 
+Kể từ migration 00022_media_chunks.sql: search_similar_content() (RPC goi ben duoi)
+tim tren bang media_chunks (item dai da duoc admin-vectorizer chia nho, xem
+aws/lambdas/admin-vectorizer/lambda_function.py) roi gop lai theo media_id -- content_text
+tra ve o day gio la NOI DUNG CUA 1 CHUNK khop nhat (khong phai full content_text cua ca
+item nua). Khong anh huong gi o phia Lambda nay (route/tham so RPC khong doi) -- va
+frontend (focus.vue) tu truoc gio cung chi hien thi title + content_url, khong render
+content_text, nen thay doi nay khong lam vo UI.
+
 Env: SUPABASE_URL, SUPABASE_ANON_KEY (bat buoc), ALLOWED_ORIGINS (CSV, optional),
      COHERE_MODEL_ID (mac dinh cohere.embed-multilingual-v3), EMBED_DIMENSIONS (mac dinh
      1024, PHAI khop VECTOR(1024) trong migration 00015 -- CUNG gia tri voi

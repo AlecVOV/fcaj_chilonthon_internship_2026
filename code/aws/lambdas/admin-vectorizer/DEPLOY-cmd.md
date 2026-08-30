@@ -187,7 +187,8 @@ Verify trong Supabase Studio: `SELECT id, title, embedding_vector IS NOT NULL AS
 | `ValidationException` từ Cohere nói model không tồn tại | Kiểm tra `COHERE_MODEL_ID=cohere.embed-multilingual-v3` đúng chính tả trong env Lambda. |
 | Lỗi Postgres khi PATCH `embedding_vector` (kiểu dữ liệu không khớp) | Chưa chạy Bước 0 (migration 00015) — cột vẫn là `VECTOR(384)` trong khi Cohere trả 1024 chiều. |
 | `/embed` trả 403 dù đúng admin | Kiểm tra `role` thật trong bảng `public.users` (không phải `auth.users`) — CloudWatch log dòng `AUTH DENY` in ra role đọc được. |
-| `/embed-all` báo lỗi `texts` quá dài hoặc quá nhiều | `MAX_BATCH=50` dưới giới hạn 96 text/lần của Cohere nên bình thường không chạm; nếu 1 `content_text` quá dài, `MAX_INPUT_CHARS=2000` + `truncate: END` đã tự cắt bớt — không nên lỗi vì độ dài. |
+| `/embed-all` báo lỗi `texts` quá dài hoặc quá nhiều | `MAX_TEXTS_PER_CALL=90` giữ dưới giới hạn 96 text/lần thật của Cohere; nếu 1 `content_text` quá dài, `_chunk_text()` (migration `00022_media_chunks.sql`) tự chia thành nhiều chunk ≤`CHUNK_CHARS=1800` ký tự/chunk thay vì cắt cụt — không nên lỗi vì độ dài. |
+| Lỗi Postgres khi ghi `media_chunks` (bảng không tồn tại) | Chưa chạy migration `00022_media_chunks.sql` — chạy trong Supabase SQL Editor, SAU `00021`. |
 | Muốn đổi model embedding khác (không phải Cohere) | Sửa `COHERE_MODEL_ID`/format request trong `_embed_texts()` + `EMBED_DIMENSIONS` — nhớ chạy lại migration đổi `VECTOR(n)` cho khớp chiều mới, và `rag-recommender` cũng phải đổi theo (2 bên phải luôn CÙNG model/chiều). |
 
 ## Cập nhật hệ thống sau này

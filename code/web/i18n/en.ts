@@ -117,6 +117,7 @@ export const en = {
     weeklyActivity: 'Weekly activity', previousWeek: 'Previous week', nextWeek: 'Next week',
     thisWeek: 'this week',
     weeklyLineChartTitle: 'Focus minutes & tasks completed — hover a point for details',
+    moodWeekTitle: 'Mood this week', noSessionThatDay: 'no session',
     focusTimeChartTitle: 'Focus time (min)',
     tasksCompletedChartTitle: 'Tasks completed', taskStatusChartTitle: 'Task status',
     openTasksByPriorityChartTitle: 'Open tasks by priority',
@@ -172,6 +173,7 @@ export const en = {
     shortBreakBtn: 'Short break ({minutes}m)', longBreakBtn: 'Long break ({minutes}m)',
     skipBreak: "Skip — I'm done for now",
     onBreak: 'On a break', endBreakEarly: 'End break',
+    enterImmersive: 'Enter immersive mode', exitImmersive: 'Exit',
   },
 
   agent: {
@@ -190,6 +192,17 @@ export const en = {
     noFocusSessionsTooltip: 'No focus sessions', minOnDate: '{min} min on {date}',
   },
 
+  health: {
+    reminderTitle: 'Time for a break?',
+    reminderBody: "You've focused for {min} minutes today. Consider stepping away for a bit.",
+    dismiss: 'Dismiss',
+  },
+
+  reportViewer: {
+    title: 'Daily Report', close: 'Close', loading: 'Loading report…',
+    loadFailed: "Couldn't load the report. Please try again.",
+  },
+
   profile: {
     title: 'Profile', accountInfo: 'Account Information', edit: 'Edit', name: 'Name', email: 'Email',
     role: 'Role', status: 'Status', usedForLogin: '(used for login)',
@@ -203,6 +216,7 @@ export const en = {
     totalFocusTime: 'Total Focus Time', worklogHistory: 'Worklog History',
     noWorklogData: 'No worklog data yet. Complete focus sessions to generate history.',
     reportButton: '⬇ Report', reportTooltip: "Download this day's Markdown report",
+    viewReportButton: 'View', viewReportTooltip: "View this day's report in the app",
     focusTimeLine: 'Focus Time: {min} min across {count} session(s)',
     tasksCompletedLine: 'Tasks Completed: {list}', dominantMoodLine: 'Dominant Mood: {mood}',
     taskReviews: 'Task Reviews', journalEntries: 'Journal Entries',
@@ -221,12 +235,14 @@ export const en = {
     heading: 'User Guide', subheading: 'A quick tour of every feature in FCAJ Worklog Repository.',
     s1Title: '1. Dashboard', s1Tagline: 'Your daily snapshot.',
     s1P1: "Shows today's total focus time, sessions, tasks done, and mood at a glance. <strong>Today's Tasks</strong> lists both pending and in-progress tasks now — you no longer need to start a task first just to see it here.",
-    s1P2: '<strong>Weekly activity</strong> plots focus minutes and tasks completed on one chart so you can compare the two at a glance; use the arrows above it to browse previous weeks. Below that, Task Status and Open Tasks by Priority give a snapshot of where things stand right now.',
+    s1P2: '<strong>Weekly activity</strong> plots focus minutes and tasks completed on one chart so you can compare the two at a glance, plus a <strong>Mood this week</strong> strip showing each day\'s dominant emotion; use the arrows above it to browse previous weeks. Below that, Task Status and Open Tasks by Priority give a snapshot of where things stand right now.',
+    s1P3: "If you've focused for 2 hours or more in one day, a small reminder card pops up in the corner suggesting a break — dismiss it and it won't come back until tomorrow.",
     s2Title: '2. Focus', s2Tagline: 'Run a timed deep-work session.',
     s2P1: 'Pick a task (optional — only in-progress tasks can be linked), choose a duration — 15/25/45 minutes or tap <strong>Custom</strong> for any length — and start the timer.',
     s2P2: 'Choose an ambient sound track — it keeps playing even if you switch to another page while the session runs.',
     s2P3: 'Turn on <strong>Offer a break</strong> before starting to get a short or long break timer right after you log the session. Breaks are never saved to your worklog — they\'re just a countdown, nothing more.',
-    s2P4: 'At the end of a session you can log your mood and a short journal entry.',
+    s2P4: 'At the end of a session you can log your mood and a short journal entry — recommended content (if any) is now a clickable link that opens in a new tab.',
+    s2P5: 'The browser tab shows the countdown while a session runs, and <strong>Enter immersive mode</strong> dims everything but the timer if you want zero distractions — press Escape or the ✕ to exit any time.',
     s3Title: '3. Tasks', s3Tagline: "Plan and track what you're working on.",
     s3P1: 'Create tasks manually, or use the <strong>Task Assistant</strong> on the Agent page — describe what you need to do in plain language and it will create tasks for you, asking clarifying questions like priority when needed.',
     s3P2: 'The <strong>Active</strong> tab merges pending and in-progress tasks into one list — tick the checkbox on any of them to mark it complete directly, no need to move a task to "In Progress" first just to finish it. Priority shows as a colored badge next to the title, and a progress bar at the top tracks your overall completion rate.',
@@ -237,7 +253,7 @@ export const en = {
     s4P3: 'Bulk actions (e.g. "clear all pending tasks and add these 5 new ones") may take longer to process — if you see a "Service Unavailable" message, it usually means the request took too long; try splitting it into smaller requests.',
     s5Title: '7. Profile & Worklog History', s5Tagline: 'Manage your account and export your work.',
     s5P1: 'Open the avatar icon in the top-right corner → <strong>Profile</strong> (same menu as Notes and Sign out). Edit your name or email — email changes apply immediately (it\'s also your login).',
-    s5P2: 'Worklog History lists each day you\'ve worked; click <strong>Report</strong> to download a Markdown summary for that day (focus time, tasks, mood, journal entries).',
+    s5P2: 'Worklog History lists each day you\'ve worked — click <strong>View</strong> to read that day\'s report right here in the app, or <strong>Report</strong> to download it as Markdown (focus time, tasks, mood, journal entries).',
     s5P3: 'Send feedback about the app directly from this page — the team reads every submission.',
     s6Title: '5. Notes', s6Tagline: 'A personal notepad, Markdown-friendly.',
     s6P1: 'Open the avatar icon in the top-right corner → <strong>Notes</strong>. Write anything — headings, lists, <strong>bold</strong>, `code` — Markdown is supported.',
@@ -265,7 +281,7 @@ export const en = {
 
   admin: {
     tabOverview: 'Overview', tabUsers: 'Users', tabMedia: 'Media', tabAmbient: 'Ambient', tabFeedback: 'Feedback',
-    tabAnnouncements: 'Announcements',
+    tabAnnouncements: 'Announcements', tabAnalytics: 'Analytics',
 
     overview: {
       adminPanelTitle: 'Admin Panel', adminPanelSubtitle: 'System management & analytics',
@@ -279,6 +295,8 @@ export const en = {
       feedbackDesc: 'Read what users are saying about the app and mark items as resolved.',
       announcementsTitle: 'Announcements',
       announcementsDesc: 'Post updates about new features — shown to every user via the bell icon.',
+      analyticsTitle: 'Analytics',
+      analyticsDesc: 'System-wide focus hours, most active users, and per-user drill-down.',
       newBadge: '{n} new',
       systemHealthTitle: 'System Health',
       systemHealthDesc: 'API Gateway status, Lambda invocations, Supabase connection monitor.',
@@ -364,6 +382,16 @@ export const en = {
       tableSent: 'Sent', tableActions: 'Actions', markRead: 'Mark read', resolve: 'Resolve',
       markedAsFlash: 'Marked as {status}', updateFailedFlash: 'Update failed',
       loadFailed: 'Failed to load feedback.',
+    },
+
+    analytics: {
+      title: 'Analytics', subtitle: 'System-wide focus activity across all users.',
+      totalFocusTime: 'Total Focus Time (all users)', totalSessions: 'Total Sessions',
+      activeUsers: 'Active Users', avgSessionLength: 'Avg. Session Length',
+      mostActiveUsers: 'Most Active Users', tableUser: 'User', tableFocusTime: 'Focus Time',
+      tableSessions: 'Sessions', tableTasksDone: 'Tasks Done', noData: 'No focus session data yet.',
+      loadFailed: 'Failed to load analytics data.', clickToExpand: 'Click a row to see recent sessions',
+      recentSessionsFor: 'Recent sessions — {name}', noRecentSessions: 'No sessions recorded.',
     },
   },
 

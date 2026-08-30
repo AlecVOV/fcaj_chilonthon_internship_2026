@@ -83,6 +83,7 @@
     <!-- Shared task-completion review prompt (works from any page) -->
     <TaskReviewDialog v-if="authUser" />
     <GuideReminderDialog v-if="authUser" />
+    <HealthReminderBanner v-if="authUser" />
   </div>
 </template>
 

@@ -94,6 +94,48 @@ export function useReportExport() {
     return `## Journal Entries\n\n${lines}\n\n`
   }
 
+  // dateStr = 'YYYY-MM-DD'; mặc định hôm nay. Trả về nội dung Markdown của báo cáo
+  // ngày đó — dùng chung cho cả tải file (downloadReport) và xem trực tiếp trong app
+  // (ReportViewerDialog, US-RPT-03) để 2 nơi không lệch nội dung.
+  async function buildReportMarkdown(dateStr?: string): Promise<string> {
+    const { currentUser, refreshCurrentUser } = useAuth()
+    // Đảm bảo email/tên lấy đúng bản mới nhất từ public.users — tránh trường hợp
+    // state cục bộ (localStorage của tab khác, hoặc chưa kịp đồng bộ) còn email cũ.
+    await refreshCurrentUser().catch(() => { /* best-effort, không chặn export */ })
+    const { getTasks, getSessions } = useDataService()
+    const date = dateStr || dayjs().format('YYYY-MM-DD')
+
+    const allTasks = await getTasks()
+    const allSessions = await getSessions()
+    const daySessions = allSessions.filter((s: any) => dayjs(s.startTime).format('YYYY-MM-DD') === date)
+    const dayTasks = allTasks.filter((t: any) =>
+      dayjs(t.createdAt).format('YYYY-MM-DD') === date ||
+      (t.completedAt && dayjs(t.completedAt).format('YYYY-MM-DD') === date))
+
+    const totalFocusTime = Math.round(daySessions.reduce((sum: number, s: any) => sum + (s.durationActual ?? s.durationPlanned ?? 0), 0) / 60)
+    const dominant = getDominantEmotion(daySessions)
+
+    const ctx: Record<string, string> = {
+      'REPORT-DATE-FULL': dayjs(date).format('dddd, MMMM D, YYYY'),
+      'USER-DISPLAY-NAME': currentUser.value?.name ?? currentUser.value?.email?.split('@')[0] ?? 'User',
+      'USER-EMAIL': currentUser.value?.email ?? 'unknown@example.com',
+      'TOTAL-FOCUS-TIME': String(totalFocusTime),
+      'SESSIONS-COUNT': String(daySessions.length),
+      'TASKS-COMPLETED': String(dayTasks.filter((t: any) => t.status === 'completed').length),
+      'TASKS-TOTAL': String(dayTasks.length),
+      'DOMINANT-EMOTION': dominant,
+      'TASK-LIST-ROWS': buildTaskRows(dayTasks),
+      'PEAK-FOCUS-HOUR': getPeakFocusHour(daySessions),
+      'MOOD-SUMMARY-TEXT': getMoodSummary(dominant),
+      'JOURNAL-BLOCK': buildJournalBlock(daySessions),
+      'APP-URL': 'https://focusmode.click',
+    }
+
+    let md = MD_TEMPLATE
+    for (const [k, v] of Object.entries(ctx)) md = md.replaceAll(`{{${k}}}`, v)
+    return md
+  }
+
   // dateStr = 'YYYY-MM-DD'; mặc định hôm nay. Tải .md của đúng ngày đó.
   async function downloadReport(dateStr?: string): Promise<void> {
     const { t } = useLocale()
@@ -101,41 +143,8 @@ export function useReportExport() {
     exportError.value = null
     lastMessage.value = ''
     try {
-      const { currentUser, refreshCurrentUser } = useAuth()
-      // Đảm bảo email/tên lấy đúng bản mới nhất từ public.users — tránh trường hợp
-      // state cục bộ (localStorage của tab khác, hoặc chưa kịp đồng bộ) còn email cũ.
-      await refreshCurrentUser().catch(() => { /* best-effort, không chặn export */ })
-      const { getTasks, getSessions } = useDataService()
       const date = dateStr || dayjs().format('YYYY-MM-DD')
-
-      const allTasks = await getTasks()
-      const allSessions = await getSessions()
-      const daySessions = allSessions.filter((s: any) => dayjs(s.startTime).format('YYYY-MM-DD') === date)
-      const dayTasks = allTasks.filter((t: any) =>
-        dayjs(t.createdAt).format('YYYY-MM-DD') === date ||
-        (t.completedAt && dayjs(t.completedAt).format('YYYY-MM-DD') === date))
-
-      const totalFocusTime = Math.round(daySessions.reduce((sum: number, s: any) => sum + (s.durationActual ?? s.durationPlanned ?? 0), 0) / 60)
-      const dominant = getDominantEmotion(daySessions)
-
-      const ctx: Record<string, string> = {
-        'REPORT-DATE-FULL': dayjs(date).format('dddd, MMMM D, YYYY'),
-        'USER-DISPLAY-NAME': currentUser.value?.name ?? currentUser.value?.email?.split('@')[0] ?? 'User',
-        'USER-EMAIL': currentUser.value?.email ?? 'unknown@example.com',
-        'TOTAL-FOCUS-TIME': String(totalFocusTime),
-        'SESSIONS-COUNT': String(daySessions.length),
-        'TASKS-COMPLETED': String(dayTasks.filter((t: any) => t.status === 'completed').length),
-        'TASKS-TOTAL': String(dayTasks.length),
-        'DOMINANT-EMOTION': dominant,
-        'TASK-LIST-ROWS': buildTaskRows(dayTasks),
-        'PEAK-FOCUS-HOUR': getPeakFocusHour(daySessions),
-        'MOOD-SUMMARY-TEXT': getMoodSummary(dominant),
-        'JOURNAL-BLOCK': buildJournalBlock(daySessions),
-        'APP-URL': 'https://focusmode.click',
-      }
-
-      let md = MD_TEMPLATE
-      for (const [k, v] of Object.entries(ctx)) md = md.replaceAll(`{{${k}}}`, v)
+      const md = await buildReportMarkdown(date)
 
       const blob = new Blob([md], { type: 'text/markdown' })
       const url = URL.createObjectURL(blob)
@@ -152,5 +161,5 @@ export function useReportExport() {
     }
   }
 
-  return { isExporting, exportError, lastMessage, downloadReport }
+  return { isExporting, exportError, lastMessage, downloadReport, buildReportMarkdown }
 }

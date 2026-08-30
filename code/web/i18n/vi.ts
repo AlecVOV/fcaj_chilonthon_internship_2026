@@ -117,6 +117,7 @@ export const vi = {
     weeklyActivity: 'Hoạt động trong tuần', previousWeek: 'Tuần trước', nextWeek: 'Tuần sau',
     thisWeek: 'tuần này',
     weeklyLineChartTitle: 'Phút tập trung & công việc hoàn thành — di chuột vào điểm để xem chi tiết',
+    moodWeekTitle: 'Tâm trạng tuần này', noSessionThatDay: 'không có phiên',
     focusTimeChartTitle: 'Thời gian tập trung (phút)',
     tasksCompletedChartTitle: 'Công việc đã hoàn thành', taskStatusChartTitle: 'Trạng thái công việc',
     openTasksByPriorityChartTitle: 'Công việc đang mở theo mức ưu tiên',
@@ -172,6 +173,7 @@ export const vi = {
     shortBreakBtn: 'Nghỉ ngắn ({minutes} phút)', longBreakBtn: 'Nghỉ dài ({minutes} phút)',
     skipBreak: 'Bỏ qua — mình xong việc rồi',
     onBreak: 'Đang nghỉ', endBreakEarly: 'Kết thúc nghỉ',
+    enterImmersive: 'Bật chế độ tập trung toàn màn hình', exitImmersive: 'Thoát',
   },
 
   agent: {
@@ -190,6 +192,17 @@ export const vi = {
     noFocusSessionsTooltip: 'Không có phiên tập trung', minOnDate: '{min} phút vào {date}',
   },
 
+  health: {
+    reminderTitle: 'Nghỉ ngơi một chút?',
+    reminderBody: 'Bạn đã tập trung {min} phút hôm nay rồi. Cân nhắc nghỉ tay một lát nhé.',
+    dismiss: 'Bỏ qua',
+  },
+
+  reportViewer: {
+    title: 'Báo cáo hằng ngày', close: 'Đóng', loading: 'Đang tải báo cáo…',
+    loadFailed: 'Không tải được báo cáo. Vui lòng thử lại.',
+  },
+
   profile: {
     title: 'Hồ sơ', accountInfo: 'Thông tin tài khoản', edit: 'Sửa', name: 'Tên', email: 'Email',
     role: 'Vai trò', status: 'Trạng thái', usedForLogin: '(dùng để đăng nhập)',
@@ -203,6 +216,7 @@ export const vi = {
     totalFocusTime: 'Tổng thời gian tập trung', worklogHistory: 'Lịch sử Worklog',
     noWorklogData: 'Chưa có dữ liệu worklog. Hoàn thành phiên tập trung để tạo lịch sử.',
     reportButton: '⬇ Báo cáo', reportTooltip: 'Tải báo cáo Markdown của ngày này',
+    viewReportButton: 'Xem', viewReportTooltip: 'Xem báo cáo của ngày này ngay trong app',
     focusTimeLine: 'Thời gian tập trung: {min} phút qua {count} phiên',
     tasksCompletedLine: 'Công việc đã hoàn thành: {list}', dominantMoodLine: 'Tâm trạng chủ đạo: {mood}',
     taskReviews: 'Cảm nhận công việc', journalEntries: 'Nhật ký',
@@ -221,12 +235,14 @@ export const vi = {
     heading: 'Hướng dẫn sử dụng', subheading: 'Tổng quan nhanh mọi tính năng trong FCAJ Worklog Repository.',
     s1Title: '1. Tổng quan', s1Tagline: 'Bức tranh hằng ngày của bạn.',
     s1P1: 'Hiển thị tổng thời gian tập trung, số phiên, số công việc đã xong và tâm trạng trong hôm nay ngay trong một cái nhìn. <strong>Công việc hôm nay</strong> giờ liệt kê cả công việc chưa bắt đầu lẫn đang thực hiện — không cần bắt đầu công việc trước mới thấy nó ở đây.',
-    s1P2: '<strong>Hoạt động trong tuần</strong> vẽ chung phút tập trung và số công việc hoàn thành trên 1 biểu đồ để dễ so sánh; dùng mũi tên phía trên để xem tuần trước. Bên dưới là Trạng thái công việc và Công việc đang mở theo mức ưu tiên, cho biết tình hình hiện tại.',
+    s1P2: '<strong>Hoạt động trong tuần</strong> vẽ chung phút tập trung và số công việc hoàn thành trên 1 biểu đồ để dễ so sánh, thêm dải <strong>Tâm trạng tuần này</strong> hiện cảm xúc chủ đạo mỗi ngày; dùng mũi tên phía trên để xem tuần trước. Bên dưới là Trạng thái công việc và Công việc đang mở theo mức ưu tiên, cho biết tình hình hiện tại.',
+    s1P3: 'Nếu bạn đã tập trung từ 2 tiếng trở lên trong 1 ngày, một thẻ nhắc nhỏ sẽ hiện ở góc màn hình gợi ý nghỉ ngơi — bấm bỏ qua thì nó sẽ không hiện lại cho tới ngày mai.',
     s2Title: '2. Tập trung', s2Tagline: 'Chạy một phiên làm việc sâu có hẹn giờ.',
     s2P1: 'Chọn một công việc (không bắt buộc — chỉ công việc đang thực hiện mới liên kết được), chọn thời lượng — 15/25/45 phút hoặc bấm <strong>Tùy chỉnh</strong> để nhập số phút bất kỳ — rồi bắt đầu đồng hồ.',
     s2P2: 'Chọn một bản nhạc nền — nhạc vẫn tiếp tục phát kể cả khi bạn chuyển sang trang khác trong lúc phiên đang chạy.',
     s2P3: 'Bật <strong>Nghỉ ngơi sau phiên này</strong> trước khi bắt đầu để có đồng hồ đếm nghỉ ngắn hoặc dài ngay sau khi ghi lại phiên. Thời gian nghỉ không bao giờ được lưu vào worklog — chỉ là bộ đếm giờ đơn thuần.',
-    s2P4: 'Khi phiên kết thúc, bạn có thể ghi lại tâm trạng và một đoạn nhật ký ngắn.',
+    s2P4: 'Khi phiên kết thúc, bạn có thể ghi lại tâm trạng và một đoạn nhật ký ngắn — nội dung gợi ý (nếu có) giờ là link bấm được, mở tab mới.',
+    s2P5: 'Tab trình duyệt hiện đếm ngược khi phiên đang chạy, và <strong>Bật chế độ tập trung toàn màn hình</strong> làm tối mọi thứ trừ đồng hồ nếu bạn muốn tuyệt đối không xao nhãng — bấm Escape hoặc ✕ để thoát bất cứ lúc nào.',
     s3Title: '3. Công việc', s3Tagline: 'Lên kế hoạch và theo dõi việc bạn đang làm.',
     s3P1: 'Tạo công việc thủ công, hoặc dùng <strong>Trợ lý công việc</strong> ở trang Agent — mô tả việc cần làm bằng ngôn ngữ tự nhiên và agent sẽ tạo công việc giúp bạn, hỏi lại khi cần (ví dụ mức ưu tiên).',
     s3P2: 'Tab <strong>Đang làm</strong> gộp chung công việc chưa bắt đầu và đang thực hiện thành 1 danh sách — tick vào ô vuông của bất kỳ công việc nào để đánh dấu hoàn thành trực tiếp, không cần chuyển sang "Đang thực hiện" trước mới xong được. Mức ưu tiên hiện dạng thẻ màu ngay cạnh tiêu đề, và thanh tiến độ phía trên theo dõi tỷ lệ hoàn thành tổng thể.',
@@ -237,7 +253,7 @@ export const vi = {
     s4P3: 'Các thao tác hàng loạt (VD: "xóa hết task đang chờ và thêm 5 task mới này") có thể mất nhiều thời gian hơn để xử lý — nếu thấy thông báo "Service Unavailable", thường là do yêu cầu mất quá nhiều thời gian; hãy thử chia nhỏ thành nhiều yêu cầu.',
     s5Title: '7. Hồ sơ & Lịch sử Worklog', s5Tagline: 'Quản lý tài khoản và xuất công việc của bạn.',
     s5P1: 'Mở icon avatar ở góc phải trên cùng → <strong>Hồ sơ</strong> (cùng menu với Ghi chú và Đăng xuất). Sửa tên hoặc email — thay đổi email có hiệu lực ngay (đây cũng là email đăng nhập của bạn).',
-    s5P2: 'Lịch sử Worklog liệt kê từng ngày bạn đã làm việc; bấm <strong>Báo cáo</strong> để tải bản tóm tắt Markdown của ngày đó (thời gian tập trung, công việc, tâm trạng, nhật ký).',
+    s5P2: 'Lịch sử Worklog liệt kê từng ngày bạn đã làm việc — bấm <strong>Xem</strong> để đọc báo cáo ngay trong app, hoặc <strong>Báo cáo</strong> để tải bản Markdown (thời gian tập trung, công việc, tâm trạng, nhật ký).',
     s5P3: 'Gửi phản hồi về app ngay từ trang này — team sẽ đọc mọi phản hồi gửi lên.',
     s6Title: '5. Ghi chú', s6Tagline: 'Sổ ghi chú cá nhân, hỗ trợ Markdown.',
     s6P1: 'Mở icon avatar ở góc phải trên cùng → <strong>Ghi chú</strong>. Viết gì cũng được — heading, danh sách, <strong>in đậm</strong>, `code` — đều hỗ trợ Markdown.',
@@ -265,7 +281,7 @@ export const vi = {
 
   admin: {
     tabOverview: 'Tổng quan', tabUsers: 'Người dùng', tabMedia: 'Media', tabAmbient: 'Âm thanh nền', tabFeedback: 'Phản hồi',
-    tabAnnouncements: 'Thông báo',
+    tabAnnouncements: 'Thông báo', tabAnalytics: 'Phân tích',
 
     overview: {
       adminPanelTitle: 'Trang quản trị', adminPanelSubtitle: 'Quản lý hệ thống & phân tích',
@@ -279,6 +295,8 @@ export const vi = {
       feedbackDesc: 'Đọc phản hồi của người dùng về app và đánh dấu đã xử lý.',
       announcementsTitle: 'Thông báo',
       announcementsDesc: 'Đăng thông báo tính năng mới — hiện cho mọi user qua icon chuông.',
+      analyticsTitle: 'Phân tích',
+      analyticsDesc: 'Tổng giờ focus toàn hệ thống, user hoạt động nhiều nhất, drill-down từng user.',
       newBadge: '{n} mới',
       systemHealthTitle: 'Tình trạng hệ thống',
       systemHealthDesc: 'Trạng thái API Gateway, lượt gọi Lambda, giám sát kết nối Supabase.',
@@ -364,6 +382,16 @@ export const vi = {
       tableSent: 'Gửi lúc', tableActions: 'Hành động', markRead: 'Đánh dấu đã đọc', resolve: 'Đã xử lý',
       markedAsFlash: 'Đã đánh dấu {status}', updateFailedFlash: 'Cập nhật thất bại',
       loadFailed: 'Không tải được danh sách phản hồi.',
+    },
+
+    analytics: {
+      title: 'Phân tích', subtitle: 'Hoạt động focus toàn hệ thống, tất cả user.',
+      totalFocusTime: 'Tổng giờ focus (mọi user)', totalSessions: 'Tổng số phiên',
+      activeUsers: 'User hoạt động', avgSessionLength: 'Thời lượng phiên TB',
+      mostActiveUsers: 'User hoạt động nhiều nhất', tableUser: 'User', tableFocusTime: 'Thời gian focus',
+      tableSessions: 'Số phiên', tableTasksDone: 'Task hoàn thành', noData: 'Chưa có dữ liệu phiên focus nào.',
+      loadFailed: 'Không tải được dữ liệu phân tích.', clickToExpand: 'Bấm vào 1 dòng để xem các phiên gần đây',
+      recentSessionsFor: 'Phiên gần đây — {name}', noRecentSessions: 'Chưa có phiên nào.',
     },
   },
 

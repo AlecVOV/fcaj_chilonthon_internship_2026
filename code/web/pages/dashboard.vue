@@ -75,6 +75,16 @@
         <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.weeklyLineChartTitle') }}</h3>
         <ChartLine :series="weeklyLineSeries" />
       </div>
+      <div class="card mt-4">
+        <h3 class="mb-3 text-2xs font-medium uppercase tracking-wider text-ink-muted dark:text-on-dark-soft">{{ t('dashboard.moodWeekTitle') }}</h3>
+        <div class="flex justify-between gap-1">
+          <div v-for="(d, i) in emotionWeek" :key="i" class="flex flex-1 flex-col items-center gap-1.5" :title="d.title">
+            <span class="text-2xs text-ink-soft dark:text-on-dark-soft/70">{{ d.label }}</span>
+            <EmotionBadge v-if="d.emotion" :label="d.emotion" />
+            <span v-else class="text-xs text-ink-soft/50 dark:text-on-dark-soft/40">--</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Snapshots (current state, not week-based) -->
@@ -152,6 +162,15 @@ const completedWeek = computed(() => weekDays.value.map((d) => {
     ? `${d.format('ddd, MMM D')} · ${done.length} done (${names.join(', ')}${done.length > 6 ? '…' : ''})`
     : `${d.format('ddd, MMM D')} · 0`
   return { label: d.format('dd'), value: done.length, title }
+}))
+// Dominant emotion per day = the most recent session's mood that day (sessions come back
+// newest-first from getSessions(), so day[0] is the latest one — same rule as `dominantMood`).
+const emotionWeek = computed(() => weekDays.value.map((d) => {
+  const key = d.format('YYYY-MM-DD')
+  const day = allSessions.value.filter(s => dayjs(s.startTime).format('YYYY-MM-DD') === key)
+  const emotion = day[0]?.emotionLabel ?? null
+  const title = emotion ? `${d.format('ddd, MMM D')} · ${t('emotion.' + emotion)}` : `${d.format('ddd, MMM D')} · ${t('dashboard.noSessionThatDay')}`
+  return { label: d.format('dd'), emotion, title }
 }))
 const weeklyLineSeries = computed(() => [
   { label: t('dashboard.focusTimeChartTitle'), color: '#cc785c', points: focusWeek.value },

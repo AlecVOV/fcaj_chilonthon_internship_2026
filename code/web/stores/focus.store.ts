@@ -58,7 +58,22 @@ export const useFocusStore = defineStore('focus', () => {
     if (status.value !== 'running' || endAt === null) return
     const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000))
     remaining.value = left
+    updateTabTitle()
     if (left <= 0) finish()
+  }
+
+  // --- Browser tab title shows the countdown, so you can glance at the tab
+  // strip instead of switching back to the app. ---------------------------
+  let baseTitle: string | null = null
+  function updateTabTitle() {
+    if (import.meta.server) return
+    if (baseTitle === null) baseTitle = document.title
+    const prefix = status.value === 'paused' ? '⏸ ' : ''
+    document.title = `${prefix}${displayTime.value} · Focus`
+  }
+  function restoreTabTitle() {
+    if (import.meta.server || baseTitle === null) return
+    document.title = baseTitle
   }
 
   function runTimer() {
@@ -74,6 +89,7 @@ export const useFocusStore = defineStore('focus', () => {
     // Freeze at the precise current value before discarding the anchor.
     if (endAt !== null) remaining.value = Math.max(0, Math.ceil((endAt - Date.now()) / 1000))
     status.value = 'paused'; stopTimer(); endAt = null
+    updateTabTitle()
   }
 
   function resume() {
@@ -86,6 +102,7 @@ export const useFocusStore = defineStore('focus', () => {
     stopTimer(); endAt = null
     status.value = 'finished'; remaining.value = 0
     sessionEndTime.value = new Date().toISOString()
+    restoreTabTitle()
     notifyComplete()
   }
 
@@ -96,6 +113,7 @@ export const useFocusStore = defineStore('focus', () => {
     stopTimer(); endAt = null
     status.value = 'finished'
     sessionEndTime.value = new Date().toISOString()
+    restoreTabTitle()
   }
 
   function reset() {
@@ -105,6 +123,7 @@ export const useFocusStore = defineStore('focus', () => {
     taskTitle.value = null
     ambientTrack.value = null; journalText.value = ''; emotionLabel.value = null
     emotionConfidence.value = null; recommendations.value = []
+    restoreTabTitle()
   }
 
   function stopTimer() {
@@ -223,6 +242,7 @@ export const useFocusStore = defineStore('focus', () => {
       }
     } else if (s.status === 'paused') {
       status.value = 'paused'; remaining.value = s.remaining || 0
+      updateTabTitle()
     } else if (s.status === 'finished') {
       status.value = 'finished'; remaining.value = 0
       sessionEndTime.value = s.sessionEndTime || new Date().toISOString()

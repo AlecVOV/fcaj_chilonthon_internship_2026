@@ -11,6 +11,7 @@
       <NuxtLink to="/admin/ambient" class="tab">{{ t('admin.tabAmbient') }}</NuxtLink>
       <NuxtLink to="/admin/feedback" class="tab tab-active">{{ t('admin.tabFeedback') }}</NuxtLink>
       <NuxtLink to="/admin/announcements" class="tab">{{ t('admin.tabAnnouncements') }}</NuxtLink>
+      <NuxtLink to="/admin/analytics" class="tab">{{ t('admin.tabAnalytics') }}</NuxtLink>
     </div>
 
     <div v-if="loadError" class="mb-6 rounded-lg border border-error/30 bg-error/5 p-4">

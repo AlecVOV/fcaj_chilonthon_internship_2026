@@ -83,14 +83,23 @@
           <div v-for="day in worklogDays" :key="day.date" class="rounded-md border border-hairline dark:border-hairline-dark p-4">
             <div class="mb-2 flex items-center justify-between gap-2">
               <h3 class="font-display text-base text-ink dark:text-on-dark">{{ dayjs(day.date).format('dddd, MMMM D, YYYY') }}</h3>
-              <button
-                @click="downloadReport(day.date)"
-                :disabled="isExporting"
-                class="shrink-0 rounded-md border border-hairline dark:border-hairline-dark px-2.5 py-1 text-xs text-ink-muted dark:text-on-dark-soft hover:bg-canvas-card dark:hover:bg-surface-dark-soft disabled:opacity-50"
-                :title="t('profile.reportTooltip')"
-              >
-                {{ t('profile.reportButton') }}
-              </button>
+              <div class="flex shrink-0 gap-1.5">
+                <button
+                  @click="reportViewer?.open(day.date)"
+                  class="rounded-md border border-hairline dark:border-hairline-dark px-2.5 py-1 text-xs text-ink-muted dark:text-on-dark-soft hover:bg-canvas-card dark:hover:bg-surface-dark-soft"
+                  :title="t('profile.viewReportTooltip')"
+                >
+                  {{ t('profile.viewReportButton') }}
+                </button>
+                <button
+                  @click="downloadReport(day.date)"
+                  :disabled="isExporting"
+                  class="rounded-md border border-hairline dark:border-hairline-dark px-2.5 py-1 text-xs text-ink-muted dark:text-on-dark-soft hover:bg-canvas-card dark:hover:bg-surface-dark-soft disabled:opacity-50"
+                  :title="t('profile.reportTooltip')"
+                >
+                  {{ t('profile.reportButton') }}
+                </button>
+              </div>
             </div>
             <div class="text-ink-body dark:text-on-dark-soft text-sm">
               <p>{{ t('profile.focusTimeLine', { min: day.totalMinutes, count: day.sessionsCount }) }}</p>
@@ -113,6 +122,8 @@
         </div>
       </div>
     </template>
+
+    <ReportViewerDialog ref="reportViewer" />
   </div>
 </template>
 
@@ -130,6 +141,7 @@ const { getTasks, getSessions } = useDataService()
 const { downloadReport, isExporting } = useReportExport()
 const { isSubmitting: fbSubmitting, submitError: fbError, submitSuccess: fbSuccess, submitFeedback } = useFeedback()
 const { t } = useLocale()
+const reportViewer = ref<{ open: (dateStr: string) => void } | null>(null)
 const fbMessage = ref('')
 
 const allTasks = ref<any[]>([]); const allSessions = ref<any[]>([])
